@@ -2,13 +2,15 @@ name: Frontend Tests
 
 on:
   push:
+    branches: [main, dev, 'feature/**']
+    paths: ['frontend/**']
   pull_request:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
+    paths: ['frontend/**']
 
 jobs:
   test-frontend:
+    name: Lint, Build & Test
     runs-on: ubuntu-latest
 
     defaults:
@@ -17,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,5 +31,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test -- --runInBand
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Run tests with coverage
+        run: npm test -- --runInBand --coverage
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
