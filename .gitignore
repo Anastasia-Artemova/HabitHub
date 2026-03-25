@@ -1,0 +1,48 @@
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDEs
+# =========================
+.vs/
+.vscode/
+.idea/
+
+# =========================
+# .NET Backend
+# =========================
+backend/**/bin/
+backend/**/obj/
+backend/**/TestResults/
+*.user
+*.suo
+
+# Secrets
+backend/**/appsettings.Development.json
+backend/**/appsettings.Local.json
+
+# =========================
+# Node / Next.js Frontend
+# =========================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+# Logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+
+# =========================
+# Temp / cache
+# =========================
+*.log
+logs/
+tmp/
+temp/
+.cache/
