@@ -31,7 +31,8 @@ export default function HabitHubLoginPage() {
             );
             if (!response.ok){
                 const message = await response.text();
-                throw new Error(message || 'Login failed');
+                console.error('Login failed:', message);
+                throw new Error('Login failed');
             }
             const data = await response.json();
             if (rememberMe) {
