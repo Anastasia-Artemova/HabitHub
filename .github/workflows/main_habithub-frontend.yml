@@ -41,6 +41,7 @@ jobs:
       - name: Verify standalone output
         run: |
           test -f .next/standalone/server.js
+          test -f .next/standalone/package.json
           test -d .next/static
 
       - name: Prepare standalone package
@@ -51,7 +52,15 @@ jobs:
           cp -r .next/static deploy/.next/static
           if [ -d public ]; then cp -r public deploy/public; fi
           if [ -f web.config ]; then cp web.config deploy/web.config; fi
-          find deploy -maxdepth 3 -type f | sort
+
+      - name: Patch package.json for Azure startup
+        run: |
+          node -e "const fs=require('fs'); const p='./deploy/package.json'; const pkg=JSON.parse(fs.readFileSync(p,'utf8')); pkg.scripts=pkg.scripts||{}; pkg.scripts.start='node server.js'; fs.writeFileSync(p, JSON.stringify(pkg, null, 2)); console.log(fs.readFileSync(p,'utf8'));"
+
+      - name: List deploy package contents
+        run: |
+          find deploy -maxdepth 4 -type f | sort
+          du -sh deploy
 
       - name: Login to Azure
         uses: azure/login@v2
