@@ -48,9 +48,20 @@ jobs:
         run: |
           rm -rf deploy
           cp -r .next/standalone deploy
-          cp -r .next deploy/.next
+          mkdir -p deploy/.next
+          cp -r .next/static deploy/.next/static
+          cp -r .next/server deploy/.next/server
+          cp .next/BUILD_ID deploy/.next/BUILD_ID
           if [ -d public ]; then cp -r public deploy/public; fi
           if [ -f web.config ]; then cp web.config deploy/web.config; fi
+
+      - name: Verify deploy package
+        run: |
+          test -f deploy/server.js
+          test -f deploy/package.json
+          test -f deploy/.next/BUILD_ID
+          test -d deploy/.next/server
+          test -d deploy/.next/static
 
       - name: Patch package.json for Azure startup
         run: |
