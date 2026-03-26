@@ -74,6 +74,6 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/", () => "HabitHub backend is running");
 
-public partial class Program { }
-
 app.Run();
+
+public partial class Program { }
