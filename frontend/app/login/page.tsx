@@ -75,8 +75,10 @@ export default function HabitHubLoginPage() {
       const data = await response.json();
 
       if (rememberMe) {
+        sessionStorage.removeItem("token");
         localStorage.setItem("token", data.token);
       } else {
+        localStorage.removeItem("token");
         sessionStorage.setItem("token", data.token);
       }
 
