@@ -16,6 +16,7 @@ public class TeamInviteCodesControllerTests
         var db = TestHelper.CreateInMemoryDbContext();
 
         var controller = new GenerateCodeController(db);
+        TestHelper.SetUnauthenticatedUser(controller);
 
         var result = await controller.GenerateInviteCode(Guid.NewGuid());
 
@@ -49,7 +50,7 @@ public class TeamInviteCodesControllerTests
 
         var result = await controller.GenerateInviteCode(team.HabitTeamId);
 
-        Assert.IsType<UnauthorizedResult>(result);
+        Assert.IsType<ForbidResult>(result);
     }
 
     [Fact]
@@ -109,6 +110,7 @@ public class TeamInviteCodesControllerTests
     {
         var db = TestHelper.CreateInMemoryDbContext();
         var controller = new GenerateCodeController(db);
+        TestHelper.SetUnauthenticatedUser(controller);
 
         var result = await controller.JoinTeam(new JoinTeamRequest { Code = "ABC12345" });
 
