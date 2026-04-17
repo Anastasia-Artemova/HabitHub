@@ -5,6 +5,12 @@ using HabitHub.Tests.Helpers;
 
 namespace HabitHub.Tests.Api;
 
+public class JoinTeamResponse
+{
+    public string Message { get; set; } = string.Empty;
+    public Guid TeamId { get; set; }
+}
+
 public class TeamsApiTests : IClassFixture<CustomWebApplicationFactory>
 {
     private readonly CustomWebApplicationFactory _factory;
@@ -101,11 +107,8 @@ public class TeamsApiTests : IClassFixture<CustomWebApplicationFactory>
         var joinResponse = await joinerClient.PostAsJsonAsync("/api/teams/join", new JoinTeamRequest { Code = invite!.Code });
         Assert.Equal(HttpStatusCode.OK, joinResponse.StatusCode);
 
-        var joined = await joinResponse.Content.ReadFromJsonAsync<TeamResponse>();
-        Assert.Equal(team.HabitTeamId, joined!.HabitTeamId);
-        Assert.Equal(2, joined.Members.Count);
-        Assert.Contains(joined.Members, m => m.MemberId == joinerAuth.UserId);
-        Assert.Contains(joined.Members, m => m.MemberId == creatorAuth.UserId);
+        var joined = await joinResponse.Content.ReadFromJsonAsync<JoinTeamResponse>();
+        Assert.Equal(team.HabitTeamId, joined!.TeamId);
     }
 
     [Fact]
