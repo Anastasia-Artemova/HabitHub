@@ -6,7 +6,7 @@ export type HabitResponseDto = {
   habitTeamId: string;
   creatorId: string;
   name: string;
-  goal?: number | null;
+  goal?: string | null;
   habitState: number | string;
   expiryDate?: string | null;
   habitType: number | string;
@@ -15,7 +15,9 @@ export type HabitResponseDto = {
 
 export type UpdateHabitRequestDto = {
   name?: string;
-  goal?: number | null;
+  goal?: string | null;
+  habitType?: string;
+  goal?: string | null;
   habitType?: number;
   expiryDate?: string | null;
   unit?: string | null;
@@ -27,7 +29,7 @@ export type Habit = {
   creatorId: string;
   name: string;
   type: HabitType;
-  goal?: number;
+  goal?: string;
   unit?: string;
   endDate?: string;
   status: HabitStatus;
