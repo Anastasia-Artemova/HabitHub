@@ -1,5 +1,6 @@
 "use client";
 
+<NotificationDropdown />
 import Link from "next/link";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +18,7 @@ import {
   User,
   LogOut,
 } from "lucide-react";
+import NotificationDropdown from "../notifications/NotificationDropdown";
 
 type Session = {
   id: number;
@@ -325,9 +327,7 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-3 self-start lg:self-auto">
-            <IconButton href="/notifications">
-              <Bell className="h-5 w-5" />
-            </IconButton>
+            <NotificationDropdown/>
             <IconButton href="/sessions">
               <Clock3 className="h-5 w-5" />
             </IconButton>
