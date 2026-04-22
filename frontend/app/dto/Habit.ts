@@ -9,7 +9,7 @@ export type HabitResponseDto = {
   goal?: string | null;
   habitState: number | string;
   expiryDate?: string | null;
-  habitType: string;
+  habitType: number | string;
   unit?: string | null;
 };
 
@@ -17,6 +17,8 @@ export type UpdateHabitRequestDto = {
   name?: string;
   goal?: string | null;
   habitType?: string;
+  goal?: string | null;
+  habitType?: number;
   expiryDate?: string | null;
   unit?: string | null;
 };
