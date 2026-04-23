@@ -44,8 +44,9 @@ public class ProfileController : ControllerBase
             updated = true;
         }
 
-        if (!updated)X
+        if (!updated){
             return BadRequest("No changes provided");
+        }
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Profile updated successfully" });
