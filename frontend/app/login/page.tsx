@@ -55,7 +55,6 @@ export default function HabitHubLoginPage() {
     setError("");
 
     try {
-<<<<<<< Updated upstream
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
         {
@@ -70,19 +69,10 @@ export default function HabitHubLoginPage() {
       if (!response.ok) {
         const message = await response.text();
         console.error("Login failed:", message);
-        throw new Error("Invalid email or password");
+        throw new Error("Invalid credentials");
       }
 
       const data = await response.json();
-=======
-      const data = await apiFetch<{ token: string; email: string; username: string }>(
-        "/api/auth/login",
-        {
-          method: "POST",
-          body: JSON.stringify({ email, password }),
-        }
-      );
->>>>>>> Stashed changes
 
       if (rememberMe) {
         sessionStorage.removeItem("token");
@@ -102,13 +92,7 @@ export default function HabitHubLoginPage() {
 
       router.push("/dashboard");
     } catch (err) {
-<<<<<<< Updated upstream
       setError(err instanceof Error ? err.message : "Something went wrong");
-=======
-      const message =
-        err instanceof Error ? err.message : "Invalid email or password";
-      setError(message);
->>>>>>> Stashed changes
     } finally {
       setLoading(false);
     }

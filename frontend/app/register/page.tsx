@@ -64,7 +64,6 @@ export default function RegisterPage() {
     }
 
     try {
-<<<<<<< Updated upstream
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/register`,
         {
@@ -72,12 +71,6 @@ export default function RegisterPage() {
           headers: {
             "Content-Type": "application/json",
           },
-=======
-      const data = await apiFetch<{ token: string; id: string; username: string }>(
-        "/api/auth/register",
-        {
-          method: "POST",
->>>>>>> Stashed changes
           body: JSON.stringify({
             email,
             password,
@@ -86,7 +79,6 @@ export default function RegisterPage() {
         }
       );
 
-<<<<<<< Updated upstream
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || "Registration failed");
@@ -94,20 +86,12 @@ export default function RegisterPage() {
 
       const data = await response.json();
 
-=======
->>>>>>> Stashed changes
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data));
 
       router.push("/dashboard");
     } catch (err) {
-<<<<<<< Updated upstream
       setError(err instanceof Error ? err.message : "Something went wrong");
-=======
-      const message =
-        err instanceof Error ? err.message : "Registration failed";
-      setError(message);
->>>>>>> Stashed changes
     } finally {
       setLoading(false);
     }
