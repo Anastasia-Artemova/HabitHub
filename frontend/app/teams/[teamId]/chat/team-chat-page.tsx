@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getToken } from "../../../auxiliary/apiFetch";
+import { fetchUserNamesByIds } from "../../../auxiliary/fetchUserNames";
 
 type MessageDto = {
   messageId: string;
@@ -9,92 +11,60 @@ type MessageDto = {
   sendDate: string;
 };
 
-type MemberBasicDto = {
-  memberId: string;
-  name: string;
-};
-
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("token") || sessionStorage.getItem("token");
-}
-
 export default function TeamChatPage({ teamId }: { teamId: string }) {
   const [messages, setMessages] = useState<MessageDto[]>([]);
   const [userMap, setUserMap] = useState<Record<string, string>>({});
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const token = getToken();
-
-  const fetchUserNames = async (messagesData: MessageDto[]) => {
-    const uniqueSenderIds = [...new Set(messagesData.map((m) => m.senderId))];
-
-    if (uniqueSenderIds.length === 0) {
-      return;
-    }
-
-    const missingIds = uniqueSenderIds.filter((id) => !userMap[id]);
-    if (missingIds.length === 0) {
-      return;
-    }
-
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/members/info?ids=${missingIds.join(",")}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (!res.ok) {
-      throw new Error("Failed to load member names");
-    }
-
-    const users: MemberBasicDto[] = await res.json();
-
-    setUserMap((prev) => {
-      const updated = { ...prev };
-      for (const user of users) {
-        updated[user.memberId] = user.name;
-      }
-      return updated;
-    });
-  };
-
-  const fetchMessages = async () => {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/teams/${teamId}/chat/messages`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to load messages: ${res.status} ${text}`);
-      }
-
-      const data: MessageDto[] = await res.json();
-      setMessages(data);
-      await fetchUserNames(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchMessages();
+    async function fetchMessages() {
+      const token = getToken();
+
+      if (!token) {
+        console.error("Missing auth token");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/teams/${teamId}/chat/messages`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Failed to load messages: ${res.status} ${text}`);
+        }
+
+        const data: MessageDto[] = await res.json();
+        setMessages(data);
+
+        const map = await fetchUserNamesByIds(data.map((m) => m.senderId));
+        setUserMap(map);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void fetchMessages();
   }, [teamId]);
 
   const sendMessage = async () => {
     if (!content.trim()) return;
+
+    const token = getToken();
+    if (!token) {
+      console.error("Missing auth token");
+      return;
+    }
 
     try {
       const res = await fetch(
@@ -116,7 +86,10 @@ export default function TeamChatPage({ teamId }: { teamId: string }) {
       const created: MessageDto = await res.json();
 
       setMessages((prev) => [...prev, created]);
-      await fetchUserNames([created]);
+
+      const newMap = await fetchUserNamesByIds([created.senderId]);
+      setUserMap((prev) => ({ ...prev, ...newMap }));
+
       setContent("");
     } catch (err) {
       console.error(err);

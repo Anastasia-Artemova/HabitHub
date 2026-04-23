@@ -13,6 +13,7 @@ import {
   Sparkles,
   CheckCircle2,
 } from "lucide-react";
+import { apiFetch } from "../auxiliary/apiFetch";
 
 const formVariants: Variants = {
   hidden: { opacity: 0, y: 24 },
@@ -54,25 +55,14 @@ export default function HabitHubLoginPage() {
     setLoading(true);
     setError("");
 
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email, password }),
-        }
-      );
-
-      if (!response.ok) {
-        const message = await response.text();
-        console.error("Login failed:", message);
-        throw new Error("Invalid email or password");
+    const data = await apiFetch<{ token: string; email: string; username: string }>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
       }
+    );
 
-      const data = await response.json();
 
       if (rememberMe) {
         sessionStorage.removeItem("token");
@@ -91,11 +81,6 @@ export default function HabitHubLoginPage() {
       );
 
       router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
   }
 
   return (
