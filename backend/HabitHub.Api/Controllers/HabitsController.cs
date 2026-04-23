@@ -263,7 +263,10 @@ public class HabitsController : ControllerBase
     }
 
     [HttpGet("{habitId:guid}/entries")]
-    public async Task<ActionResult<List<LogHabitResponse>>> GetHabitEntries([FromRoute] Guid habitId)
+    public async Task<ActionResult<List<LogHabitResponse>>> GetHabitEntries(
+        [FromRoute] Guid habitId,
+        [FromQuery] DateOnly? date
+    )
     {
         var userId = GetCurrentUserId.GetUserId(User);
         if (userId == null)
@@ -271,6 +274,7 @@ public class HabitsController : ControllerBase
 
         var habit = await _context.Habits
             .Include(h => h.Team)
+                .ThenInclude(t => t.Memberships)
             .FirstOrDefaultAsync(h => h.HabitId == habitId);
 
         if (habit == null)
@@ -278,6 +282,34 @@ public class HabitsController : ControllerBase
 
         if (!habit.Team.Memberships.Any(m => m.MemberId == userId.Value))
             return Forbid();
+        
+        if (date.HasValue)
+        {
+            var startOfDayUtc = DateTime.SpecifyKind(
+                date.Value.ToDateTime(TimeOnly.MinValue),
+                DateTimeKind.Utc);
+
+            var endOfDayUtc = startOfDayUtc.AddDays(1);
+
+            var specificDateEntries = await _context.HabitEntries
+                .Where(e =>
+                    e.HabitId == habitId &&
+                    e.Date >= startOfDayUtc &&
+                    e.Date < endOfDayUtc)
+                .Select(e => new LogHabitResponse
+                {
+                    HabitEntryId = e.HabitEntryId,
+                    HabitId = e.HabitId,
+                    MemberId = e.MemberId,
+                    Status = e.Status,
+                    Value = e.Value,
+                    Notes = e.Notes,
+                    Date = e.Date
+                })
+                .ToListAsync();
+
+            return Ok(specificDateEntries);
+        }
 
         var entries = await _context.HabitEntries
             .Where(e => e.HabitId == habitId)
