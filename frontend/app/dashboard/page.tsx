@@ -23,9 +23,8 @@ import {
 import NotificationDropdown from "../notifications/NotificationDropdown";
 import { Habit, HabitEntryRequest, HabitEntryResponse, HabitResponseDto } from "../dto/Habit";
 import { mapHabit } from "../auxiliary/mapHabit";
-import { set } from "zod";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+import { apiFetch } from "../auxiliary/apiFetch";
+import { getCurrentUserId } from "../auxiliary/getCurrentUserId";
 
 type Session = {
   id: number;
@@ -45,65 +44,6 @@ function getToken(): string | null {
   return localStorage.getItem("token") || sessionStorage.getItem("token");
 }
 
-function parseJwt(token: string): Record<string, unknown> | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-    return JSON.parse(atob(padded));
-  } catch {
-    return null;
-  }
-}
-
-function getCurrentUserId(): string | null {
-  const token = getToken();
-  if (!token) return null;
-
-  const payload = parseJwt(token);
-  if (!payload) return null;
-
-  const keys = [
-    "nameid",
-    "sub",
-    "userId",
-    "userid",
-    "id",
-    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
-  ];
-
-  for (const key of keys) {
-    const value = payload[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `Request failed with status ${response.status}`);
-  }
-
-  return response.json() as Promise<T>;
-}
 
 async function fetchHabitsForMember(memberId: string): Promise<Habit[]> {
   const dtos = await apiFetch<HabitResponseDto[]>(`/api/habits?memberId=${memberId}`, {
