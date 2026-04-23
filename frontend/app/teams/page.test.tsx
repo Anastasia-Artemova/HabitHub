@@ -1,340 +1,519 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import TeamsPage from "./page";
-import { head } from "framer-motion/client";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+
+process.env.NEXT_PUBLIC_API_BASE_URL = "http://test";
 
 jest.mock("next/link", () => {
-    return ({ children, href }: { children: React.ReactNode; href: string }) => (
-        <a href={href}>{children}</a>
-    );
+  return ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  );
 });
 
 jest.mock("framer-motion", () => {
-    const React = require("react");
+  const React = require("react");
 
-    const cleanProps = (props: Record<string, unknown>) => {
-        const {
-            whileHover,
-            whileTap,
-            layout,
-            initial,
-            animate,
-            exit,
-            transition,
-            variants,
-            ...rest
-        } = props;
-        return rest;
-    };
+  const cleanProps = (props: Record<string, unknown>) => {
+    const {
+      whileHover,
+      whileTap,
+      layout,
+      initial,
+      animate,
+      exit,
+      transition,
+      variants,
+      ...rest
+    } = props;
+    return rest;
+  };
 
-    const MockMotionComponent = React.forwardRef(
-        (
-            {
-                children,
-                ...props
-            }: React.PropsWithChildren<Record<string, unknown>>,
-            ref: React.Ref<HTMLElement>
-        ) => React.createElement("div", { ...cleanProps(props), ref }, children)
-    );
+  const MockMotionComponent = React.forwardRef(
+    (
+      { children, ...props }: React.PropsWithChildren<Record<string, unknown>>,
+      ref: React.Ref<HTMLElement>
+    ) => React.createElement("div", { ...cleanProps(props), ref }, children)
+  );
 
-    return {
-        motion: new Proxy(
-            {},
-            {
-                get: () => MockMotionComponent,
-            }
-        ),
-        AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    };
+  return {
+    motion: new Proxy({}, { get: () => MockMotionComponent }),
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  };
 });
 
-describe("TeamsPage", () => {
-    const creatorToken =
-        "header." + btoa(JSON.stringify({ nameid: "creator-1" })) + ".signature";
+const TeamsPage = require("./page").default;
 
-    beforeEach(() => {
-        jest.clearAllMocks();
+const mockFetch = jest.fn();
+global.fetch = mockFetch as typeof fetch;
 
-        Object.defineProperty(window, "localStorage", {
-            value: {
-                getItem: jest.fn((key: string) => {
-                    if (key === "token") return creatorToken;
-                    return null;
-                }),
-                setItem: jest.fn(),
-                removeItem: jest.fn(),
-                clear: jest.fn(),
-            },
-            writable: true,
-        });
+function createFakeJwt(payload: Record<string, unknown>): string {
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = btoa(JSON.stringify(payload));
+  return `${header}.${body}.signature`;
+}
 
-        Object.defineProperty(window, "sessionStorage", {
-            value: {
-                getItem: jest.fn(() => null),
-                setItem: jest.fn(),
-                removeItem: jest.fn(),
-                clear: jest.fn(),
-            },
-            writable: true,
-        });
+function jsonResponse(data: unknown, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get: (key: string) =>
+        key.toLowerCase() === "content-type" ? "application/json" : null,
+    },
+    json: async () => data,
+    text: async () => JSON.stringify(data),
+  };
+}
 
-        Object.defineProperty(window, "navigator", {
-            value: {
-                clipboard: {
-                    writeText: jest.fn(),
-                },
-            },
-            writable: true,
-        });
+function textResponse(text: string, status = 500) {
+  return {
+    ok: false,
+    status,
+    headers: {
+      get: (key: string) =>
+        key.toLowerCase() === "content-type" ? "text/plain" : null,
+    },
+    json: async () => {
+      throw new Error("not json");
+    },
+    text: async () => text,
+  };
+}
 
-        global.fetch = jest.fn(() =>
-        Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: {
-                get: () => "application/json",
-            },
-            json: async () => ({ token: "fake-token", user: { id: "1" } }),
-        } as unknown as Response)
-        );
+describe("TeamsPage integration-style tests", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch.mockReset();
+    localStorage.clear();
+    sessionStorage.clear();
+
+    localStorage.setItem("token", createFakeJwt({ sub: "creator-1" }));
+
+    Object.defineProperty(window, "navigator", {
+      value: {
+        clipboard: {
+          writeText: jest.fn(),
+        },
+      },
+      writable: true,
     });
 
-    function jsonResponse(data: unknown, status = 200) {
-        return Promise.resolve({
-            ok: status >= 200 && status < 300,
-            status,
-            headers: {
-            get: () => "application/json",
-            },
-            json: async () => data,
-            text: async () => JSON.stringify(data),
-        });
-    }
-
-    function textError(message: string, status = 500) {
-        return Promise.resolve({
-            ok: false,
-            status,
-            headers: {
-            get: () => "text/plain",
-            },
-            json: async () => {
-            throw new Error("No JSON body");
-            },
-            text: async () => message,
-        });
-    }
-
-    it("renders create team and join team forms correctly", async () => {
-        (global.fetch as jest.Mock)
-            .mockImplementationOnce(() => jsonResponse([]));
-
-        render(<TeamsPage />);
-
-        expect(await screen.findByLabelText(/team name/i)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /create team/i })).toBeInTheDocument();
-        expect(screen.getByLabelText(/invite code/i)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /join team/i })).toBeInTheDocument();
+    Object.defineProperty(window, "open", {
+      value: jest.fn(),
+      writable: true,
     });
+  });
 
-    it("creates a team successfully and refreshes team list", async () => {
-        const createdTeam = {
+  it("loads teams, selected team details, and team habits through the real helper chain", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === "http://test/api/teams") {
+        return jsonResponse([
+          {
             habitTeamId: "team-1",
+            name: "Alpha Team",
+            creatorId: "creator-1",
+            members: [
+              { memberId: "creator-1", name: "Alice", email: "alice@example.com" },
+              { memberId: "member-2", name: "Bob", email: "bob@example.com" },
+            ],
+          },
+          {
+            habitTeamId: "team-2",
+            name: "Bravo Team",
+            creatorId: "member-2",
+            members: [{ memberId: "member-2", name: "Bob", email: "bob@example.com" }],
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/team-1") {
+        return jsonResponse({
+          habitTeamId: "team-1",
+          name: "Alpha Team",
+          creatorId: "creator-1",
+          members: [
+            { memberId: "creator-1", name: "Alice", email: "alice@example.com" },
+            { memberId: "member-2", name: "Bob", email: "bob@example.com" },
+          ],
+        });
+      }
+
+      if (url === "http://test/api/teams/team-1/habits") {
+        return jsonResponse([
+          {
+            habitId: "habit-1",
+            habitTeamId: "team-1",
+            creatorId: "creator-1",
+            name: "Hydrate",
+            goal: "8",
+            habitState: "active",
+            expiryDate: "2026-12-31T00:00:00Z",
+            habitType: "quantitative",
+            unit: "cups",
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/team-2") {
+        return jsonResponse({
+          habitTeamId: "team-2",
+          name: "Bravo Team",
+          creatorId: "member-2",
+          members: [{ memberId: "member-2", name: "Bob", email: "bob@example.com" }],
+        });
+      }
+
+      if (url === "http://test/api/teams/team-2/habits") {
+        return jsonResponse([]);
+      }
+
+      throw new Error(`Unhandled fetch URL: ${url}`);
+    });
+
+    render(<TeamsPage />);
+
+    expect(await screen.findByText("Alpha Team")).toBeInTheDocument();
+    expect(screen.getByText("Bravo Team")).toBeInTheDocument();
+
+    expect(await screen.findByText("Hydrate")).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("Goal: 8"))).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Bravo Team"));
+
+    expect(await screen.findByText(/no habits created for this team yet/i)).toBeInTheDocument();
+
+    expect(mockFetch).toHaveBeenCalled();
+  });
+
+  it("creates a team through the real apiFetch flow and reloads the page state", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "http://test/api/teams" && (!init?.method || init.method === "GET")) {
+        if (
+          mockFetch.mock.calls.filter((call) => String(call[0]) === "http://test/api/teams")
+            .length === 1
+        ) {
+          return jsonResponse([]);
+        }
+        return jsonResponse([
+          {
+            habitTeamId: "team-new",
             name: "Morning Momentum",
             creatorId: "creator-1",
-            members: [{ memberId: "creator-1", name: "Ashley", email: "ashley@example.com" }],
-        };
+            members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
+          },
+        ]);
+      }
 
-        (global.fetch as jest.Mock)
-            .mockImplementationOnce(() => jsonResponse([]))
-            .mockImplementationOnce(() => jsonResponse(createdTeam, 201))
-            .mockImplementationOnce(() => jsonResponse([createdTeam]))
-            .mockImplementationOnce(() => jsonResponse(createdTeam));
-
-        render(<TeamsPage />);
-
-        fireEvent.change(await screen.findByLabelText(/team name/i), {
-            target: { value: "Morning Momentum" },
+      if (url === "http://test/api/teams" && init?.method === "POST") {
+        return jsonResponse({
+          habitTeamId: "team-new",
+          name: "Morning Momentum",
+          creatorId: "creator-1",
+          members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
         });
+      }
 
-        fireEvent.click(screen.getByRole("button", { name: /create team/i }));
-
-        await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(
-                "/api/teams",
-                expect.objectContaining({
-                    method: "POST",
-                    body: JSON.stringify({ name: "Morning Momentum" }),
-                })
-            );
+      if (url === "http://test/api/teams/team-new") {
+        return jsonResponse({
+          habitTeamId: "team-new",
+          name: "Morning Momentum",
+          creatorId: "creator-1",
+          members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
         });
+      }
 
-        expect(await screen.findByText(/team created successfully/i)).toBeInTheDocument();
+      if (url === "http://test/api/teams/team-new/habits") {
+        return jsonResponse([]);
+      }
 
-        await waitFor(() => {
-            expect(screen.getAllByText("Morning Momentum").length).toBeGreaterThan(0);
-        });
+      throw new Error(`Unhandled fetch URL: ${url}`);
     });
 
-    it("shows error when team creation fails", async () => {
-        (global.fetch as jest.Mock)
-            .mockImplementationOnce(() => jsonResponse([]))
-            .mockImplementationOnce(() => textError("Failed to create team", 400));
+    render(<TeamsPage />);
 
-        render(<TeamsPage />);
+    expect(await screen.findByText(/no teams yet/i)).toBeInTheDocument();
 
-        fireEvent.change(await screen.findByLabelText(/team name/i), {
-            target: { value: "Broken Team" },
-        });
-
-        fireEvent.click(screen.getByRole("button", { name: /create team/i }));
-
-        expect(await screen.findByText(/failed to create team/i)).toBeInTheDocument();
-        expect(screen.queryByText("Broken Team")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/team name/i), {
+      target: { value: "Morning Momentum" },
     });
 
-    it("shows loading state while creating team", async () => {
-        let resolveCreate: (value: unknown) => void = () => { };
+    fireEvent.click(screen.getByRole("button", { name: /^create team$/i }));
 
-        const createdTeam = {
-            habitTeamId: "team-2",
-            name: "Loading Team",
-            creatorId: "creator-1",
-            members: [],
-        };
+    expect(await screen.findByText(/team created successfully/i)).toBeInTheDocument();
+    expect(await screen.findByText("Morning Momentum")).toBeInTheDocument();
 
-        (global.fetch as jest.Mock)
-            .mockImplementationOnce(() => jsonResponse([]))
-            .mockImplementationOnce(
-                () =>
-                    new Promise((resolve) => {
-                        resolveCreate = resolve;
-                    })
-            )
-            .mockImplementationOnce(() => jsonResponse([createdTeam]))
-            .mockImplementationOnce(() => jsonResponse(createdTeam));
+    const postCall = mockFetch.mock.calls.find(
+      ([url, init]) =>
+        String(url) === "http://test/api/teams" && (init as RequestInit)?.method === "POST"
+    );
 
-        render(<TeamsPage />);
+    expect(postCall).toBeTruthy();
+    expect((postCall?.[1] as RequestInit).body).toBe(
+      JSON.stringify({ name: "Morning Momentum" })
+    );
+  });
 
-        fireEvent.change(await screen.findByLabelText(/team name/i), {
-            target: { value: "Loading Team" },
-        });
+  it("joins a team through the real apiFetch flow and reloads teams", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
 
-        fireEvent.click(screen.getByRole("button", { name: /create team/i }));
-
-        expect(screen.getByRole("button", { name: /creating/i })).toBeDisabled();
-
-        resolveCreate({
-            ok: true,
-            status: 201,
-            headers: {
-                get: () => "application/json",
-            },
-            json: async () => createdTeam,
-            text: async () => JSON.stringify(createdTeam),
-        });
-
-        expect(await screen.findByText(/team created successfully/i)).toBeInTheDocument();
-    });
-
-    it("joins a team successfully and refreshes team list", async () => {
-        const joinedTeam = {
-            habitTeamId: "team-3",
+      if (url === "http://test/api/teams" && (!init?.method || init.method === "GET")) {
+        if (
+          mockFetch.mock.calls.filter((call) => String(call[0]) === "http://test/api/teams")
+            .length === 1
+        ) {
+          return jsonResponse([]);
+        }
+        return jsonResponse([
+          {
+            habitTeamId: "team-join",
             name: "Joined Team",
-            creatorId: "creator-99",
+            creatorId: "member-9",
             members: [
-                { memberId: "creator-99", name: "Creator", email: "creator@example.com" },
-                { memberId: "creator-1", name: "Ashley", email: "ashley@example.com" },
+              { memberId: "member-9", name: "Owner", email: "owner@example.com" },
+              { memberId: "creator-1", name: "Alice", email: "alice@example.com" },
             ],
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/join" && init?.method === "POST") {
+        return {
+          ok: true,
+          status: 204,
+          headers: { get: () => null },
         };
+      }
 
-        (global.fetch as jest.Mock)
-            .mockImplementationOnce(() => jsonResponse([]))
-            .mockImplementationOnce(() => jsonResponse({}, 200))
-            .mockImplementationOnce(() => jsonResponse([joinedTeam]))
-            .mockImplementationOnce(() => jsonResponse(joinedTeam));
-
-        render(<TeamsPage />);
-
-        fireEvent.change(await screen.findByLabelText(/invite code/i), {
-            target: { value: "JOIN1234" },
+      if (url === "http://test/api/teams/team-join") {
+        return jsonResponse({
+          habitTeamId: "team-join",
+          name: "Joined Team",
+          creatorId: "member-9",
+          members: [
+            { memberId: "member-9", name: "Owner", email: "owner@example.com" },
+            { memberId: "creator-1", name: "Alice", email: "alice@example.com" },
+          ],
         });
+      }
 
-        fireEvent.click(screen.getByRole("button", { name: /join team/i }));
+      if (url === "http://test/api/teams/team-join/habits") {
+        return jsonResponse([]);
+      }
 
-        await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(
-                "/api/teams/join",
-                expect.objectContaining({
-                    method: "POST",
-                    body: JSON.stringify({ code: "JOIN1234" }),
-                })
-            );
-        });
-
-        expect(await screen.findByText(/joined team successfully/i)).toBeInTheDocument();
-
-        await waitFor(() => {
-            expect(screen.getAllByText("Joined Team").length).toBeGreaterThan(0);
-        });
+      throw new Error(`Unhandled fetch URL: ${url}`);
     });
 
-    it("shows error when joining team fails", async () => {
-        (global.fetch as jest.Mock)
-            .mockImplementationOnce(() => jsonResponse([]))
-            .mockImplementationOnce(() => textError("Invalid invite code", 409));
+    render(<TeamsPage />);
 
-        render(<TeamsPage />);
+    expect(await screen.findByText(/no teams yet/i)).toBeInTheDocument();
 
-        fireEvent.change(await screen.findByLabelText(/invite code/i), {
-            target: { value: "WRONG123" },
-        });
-
-        fireEvent.click(screen.getByRole("button", { name: /join team/i }));
-
-        expect(await screen.findByText(/invalid invite code/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/invite code/i), {
+      target: { value: "INVITE-ABC-123" },
     });
 
-    it("shows loading state while joining team", async () => {
-        let resolveJoin: (value: unknown) => void = () => { };
+    fireEvent.click(screen.getByRole("button", { name: /^join team$/i }));
 
-        const joinedTeam = {
-            habitTeamId: "team-4",
-            name: "Joining Team",
+    expect(await screen.findByText(/joined team successfully/i)).toBeInTheDocument();
+    expect(await screen.findByText("Joined Team")).toBeInTheDocument();
+
+    const joinCall = mockFetch.mock.calls.find(
+      ([url, init]) =>
+        String(url) === "http://test/api/teams/join" &&
+        (init as RequestInit)?.method === "POST"
+    );
+
+    expect(joinCall).toBeTruthy();
+    expect((joinCall?.[1] as RequestInit).body).toBe(
+      JSON.stringify({ code: "INVITE-ABC-123" })
+    );
+  });
+
+  it("generates and copies an invite code for the selected team", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "http://test/api/teams") {
+        return jsonResponse([
+          {
+            habitTeamId: "team-1",
+            name: "Alpha Team",
             creatorId: "creator-1",
-            members: [],
-        };
+            members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
+          },
+        ]);
+      }
 
-        (global.fetch as jest.Mock)
-            .mockImplementationOnce(() => jsonResponse([]))
-            .mockImplementationOnce(
-                () =>
-                    new Promise((resolve) => {
-                        resolveJoin = resolve;
-                    })
-            )
-            .mockImplementationOnce(() => jsonResponse([joinedTeam]))
-            .mockImplementationOnce(() => jsonResponse(joinedTeam));
-
-        render(<TeamsPage />);
-
-        fireEvent.change(await screen.findByLabelText(/invite code/i), {
-            target: { value: "TEAM2026" },
+      if (url === "http://test/api/teams/team-1") {
+        return jsonResponse({
+          habitTeamId: "team-1",
+          name: "Alpha Team",
+          creatorId: "creator-1",
+          members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
         });
+      }
 
-        fireEvent.click(screen.getByRole("button", { name: /join team/i }));
+      if (url === "http://test/api/teams/team-1/habits") {
+        return jsonResponse([]);
+      }
 
-        expect(screen.getByRole("button", { name: /joining/i })).toBeDisabled();
-
-        resolveJoin({
-            ok: true,
-            status: 200,
-            headers: {
-                get: () => "application/json",
-            },
-            json: async () => ({}),
-            text: async () => "",
+      if (url === "http://test/api/teams/team-1/invite-codes" && init?.method === "POST") {
+        return jsonResponse({
+          code: "CODE-12345",
+          expiryDate: "2026-12-31T10:00:00Z",
+          habitTeamId: "team-1",
         });
+      }
 
-        expect(await screen.findByText(/joined team successfully/i)).toBeInTheDocument();
+      throw new Error(`Unhandled fetch URL: ${url}`);
     });
+
+    render(<TeamsPage />);
+
+    expect(await screen.findByText("Alpha Team")).toBeInTheDocument();
+
+    const generateInviteButton = await screen.findByText(/generate invite code/i);
+    fireEvent.click(generateInviteButton);
+
+    expect(await screen.findByText("CODE-12345")).toBeInTheDocument();
+
+    const copyCodeButton = await screen.findByText(/copy code/i);
+
+    await act(async () => {
+        fireEvent.click(copyCodeButton);
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("CODE-12345");
+    expect(await screen.findByText(/invite code copied/i)).toBeInTheDocument();
+    });
+
+  it("creates a team habit through the real apiFetch flow and refreshes the habit list", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "http://test/api/teams") {
+        return jsonResponse([
+          {
+            habitTeamId: "team-1",
+            name: "Alpha Team",
+            creatorId: "creator-1",
+            members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/team-1") {
+        return jsonResponse({
+          habitTeamId: "team-1",
+          name: "Alpha Team",
+          creatorId: "creator-1",
+          members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
+        });
+      }
+
+      if (
+        url === "http://test/api/teams/team-1/habits" &&
+        (!init?.method || init.method === "GET")
+      ) {
+        const getCount = mockFetch.mock.calls.filter(
+          ([u, i]) =>
+            String(u) === "http://test/api/teams/team-1/habits" &&
+            (!i || !(i as RequestInit).method || (i as RequestInit).method === "GET")
+        ).length;
+
+        if (getCount === 1) {
+          return jsonResponse([]);
+        }
+
+        return jsonResponse([
+          {
+            habitId: "team-habit-1",
+            habitTeamId: "team-1",
+            creatorId: "creator-1",
+            name: "Read Pages",
+            goal: "10",
+            habitState: "active",
+            expiryDate: "2026-12-31T00:00:00Z",
+            habitType: "quantitative",
+            unit: "pages",
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/team-1/habits" && init?.method === "POST") {
+        return jsonResponse({
+          habitId: "team-habit-1",
+          habitTeamId: "team-1",
+          creatorId: "creator-1",
+          name: "Read Pages",
+          goal: "10",
+          habitState: "active",
+          expiryDate: "2026-12-31T00:00:00Z",
+          habitType: "quantitative",
+          unit: "pages",
+        });
+      }
+
+      throw new Error(`Unhandled fetch URL: ${url}`);
+    });
+
+    render(<TeamsPage />);
+
+    expect(await screen.findByText("Alpha Team")).toBeInTheDocument();
+    expect(await screen.findByText(/no habits created for this team yet/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/read 10 pages/i), {
+      target: { value: "Read Pages" },
+    });
+
+    fireEvent.change(screen.getByDisplayValue("Binary"), {
+      target: { value: "value" },
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/e.g. 10/i), {
+      target: { value: "10" },
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/pages, km/i), {
+      target: { value: "pages" },
+    });
+
+    fireEvent.change(document.querySelector('input[type="date"]') as HTMLInputElement, {
+        target: { value: "2026-12-31" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /create habit for team/i }));
+
+    expect(await screen.findByText(/habit created successfully/i)).toBeInTheDocument();
+    expect(await screen.findByText("Read Pages")).toBeInTheDocument();
+
+    const postCall = mockFetch.mock.calls.find(
+      ([url, init]) =>
+        String(url) === "http://test/api/teams/team-1/habits" &&
+        (init as RequestInit)?.method === "POST"
+    );
+
+    expect(postCall).toBeTruthy();
+    expect((postCall?.[1] as RequestInit).body).toBe(
+      JSON.stringify({
+        name: "Read Pages",
+        goal: "10",
+        habitType: 1,
+        expiryDate: new Date("2026-12-31").toISOString(),
+        unit: "pages",
+      })
+    );
+  });
+
+  it("shows the backend message when loading teams fails", async () => {
+    mockFetch.mockResolvedValueOnce(textResponse("Teams load failed", 500));
+
+    render(<TeamsPage />);
+
+    expect(await screen.findByText("Teams load failed")).toBeInTheDocument();
+  });
 });

@@ -1,122 +1,352 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import HabitsPage from "./page";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+process.env.NEXT_PUBLIC_API_BASE_URL = "http://test";
 
 jest.mock("next/link", () => {
-    return ({ children, href }: { children: React.ReactNode; href: string }) => (
-        <a href={href}>{children}</a>
-    );
+  return ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  );
 });
 
 jest.mock("framer-motion", () => {
-    const React = require("react");
+  const React = require("react");
 
-    const cleanProps = (props: Record<string, unknown>) => {
-        const {
-            whileHover,
-            whileTap,
-            layout,
-            initial,
-            animate,
-            exit,
-            transition,
-            variants,
-            ...rest
-        } = props;
-        return rest;
-    };
+  const cleanProps = (props: Record<string, unknown>) => {
+    const {
+      whileHover,
+      whileTap,
+      layout,
+      initial,
+      animate,
+      exit,
+      transition,
+      variants,
+      ...rest
+    } = props;
+    return rest;
+  };
 
-    const MockMotionComponent = React.forwardRef(
-        (
-            {
-                children,
-                ...props
-            }: React.PropsWithChildren<Record<string, unknown>>,
-            ref: React.Ref<HTMLElement>
-        ) => React.createElement("div", { ...cleanProps(props), ref }, children)
-    );
+  const MockMotionComponent = React.forwardRef(
+    (
+      { children, ...props }: React.PropsWithChildren<Record<string, unknown>>,
+      ref: React.Ref<HTMLElement>
+    ) => React.createElement("div", { ...cleanProps(props), ref }, children)
+  );
 
-    return {
-        motion: new Proxy(
-            {},
-            {
-                get: () => MockMotionComponent,
-            }
-        ),
-        AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    };
+  return {
+    motion: new Proxy({}, { get: () => MockMotionComponent }),
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  };
 });
 
-describe("HabitsPage", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+const HabitsPage = require("./page").default;
 
-    it("renders habits page header and description", () => {
-        render(<HabitsPage />);
+const mockFetch = jest.fn();
+global.fetch = mockFetch as typeof fetch;
 
-        expect(
-            screen.getByRole("heading", { name: /^habits$/i, level: 1 })
-        ).toBeInTheDocument();
+function createFakeJwt(payload: Record<string, unknown>): string {
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = btoa(JSON.stringify(payload));
+  return `${header}.${body}.signature`;
+}
 
-        expect(
-            screen.getByText(/manage, update, archive, and track all team habits/i)
-        ).toBeInTheDocument();
-    });
+function jsonResponse(data: unknown, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get: (key: string) =>
+        key.toLowerCase() === "content-type" ? "application/json" : null,
+    },
+    json: async () => data,
+    text: async () => JSON.stringify(data),
+  };
+}
 
-    it("renders main navigation links", () => {
-        render(<HabitsPage />);
+function textResponse(text: string, status = 500) {
+  return {
+    ok: false,
+    status,
+    headers: {
+      get: (key: string) =>
+        key.toLowerCase() === "content-type" ? "text/plain" : null,
+    },
+    json: async () => {
+      throw new Error("not json");
+    },
+    text: async () => text,
+  };
+}
 
-        expect(screen.getByRole("link", { name: /home/i })).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /teams/i })).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /^habits$/i })).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /progress/i })).toBeInTheDocument();
-    });
+describe("HabitsPage integration-style tests", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch.mockReset();
+    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.setItem("token", createFakeJwt({ sub: "user-123" }));
+  });
 
-    it("renders habit overview and management sections", () => {
-        render(<HabitsPage />);
+  it("loads habits through the real helper chain and shows active habits by default", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          habitId: "habit-1",
+          habitTeamId: "team-1",
+          creatorId: "user-123",
+          name: "Hydrate",
+          goal: "8",
+          habitState: "active",
+          expiryDate: "2026-12-31T00:00:00Z",
+          habitType: "quantitative",
+          unit: "cups",
+        },
+        {
+          habitId: "habit-2",
+          habitTeamId: "team-1",
+          creatorId: "user-123",
+          name: "Read Book",
+          goal: null,
+          habitState: "archived",
+          expiryDate: null,
+          habitType: "binary",
+          unit: null,
+        },
+      ])
+    );
 
-        expect(screen.getByText(/habit overview/i)).toBeInTheDocument();
-        expect(screen.getByText(/habit management/i)).toBeInTheDocument();
-    });
+    render(<HabitsPage />);
 
-    it("renders active and archived tab buttons", () => {
-        render(<HabitsPage />);
+    expect(screen.getByText(/loading habits/i)).toBeInTheDocument();
 
-        expect(screen.getByRole("button", { name: /active habits/i })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /archived habits/i })).toBeInTheDocument();
-    });
+    expect(await screen.findByText("Hydrate")).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("Goal: 8"))).toBeInTheDocument();
 
-    it("allows switching between active and archived tabs", () => {
-        render(<HabitsPage />);
+    expect(screen.queryByText("Read Book")).not.toBeInTheDocument();
 
-        const activeButton = screen.getByRole("button", { name: /active habits/i });
-        const archivedButton = screen.getByRole("button", { name: /archived habits/i });
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(String(url)).toBe("http://test/api/habits?memberId=user-123");
+    expect((options as RequestInit).method).toBe("GET");
+  });
 
-        fireEvent.click(archivedButton);
-        expect(screen.getByRole("button", { name: /archived habits/i })).toBeInTheDocument();
+  it("switches to archived habits using real mapped data", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          habitId: "habit-1",
+          habitTeamId: "team-1",
+          creatorId: "user-123",
+          name: "Hydrate",
+          goal: "8",
+          habitState: "active",
+          expiryDate: "2026-12-31T00:00:00Z",
+          habitType: "quantitative",
+          unit: "cups",
+        },
+        {
+          habitId: "habit-2",
+          habitTeamId: "team-1",
+          creatorId: "user-123",
+          name: "Read Book",
+          goal: null,
+          habitState: "archived",
+          expiryDate: null,
+          habitType: "binary",
+          unit: null,
+        },
+      ])
+    );
 
-        fireEvent.click(activeButton);
-        expect(screen.getByRole("button", { name: /active habits/i })).toBeInTheDocument();
-    });
+    render(<HabitsPage />);
 
-    it("shows create action as disabled because endpoint is not added yet", () => {
-        render(<HabitsPage />);
+    expect(await screen.findByText("Hydrate")).toBeInTheDocument();
 
-        const createButton = screen.getByRole("button", {
-            name: /create endpoint not added yet/i,
+    fireEvent.click(screen.getByRole("button", { name: /archived habits/i }));
+
+    expect(await screen.findByText("Read Book")).toBeInTheDocument();
+    expect(screen.queryByText("Hydrate")).not.toBeInTheDocument();
+  });
+
+  it("updates a habit through the real apiFetch flow", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "http://test/api/habits?memberId=user-123") {
+        return jsonResponse([
+          {
+            habitId: "habit-1",
+            habitTeamId: "team-1",
+            creatorId: "user-123",
+            name: "Hydrate",
+            goal: "8",
+            habitState: "active",
+            expiryDate: "2026-12-31T00:00:00Z",
+            habitType: "quantitative",
+            unit: "cups",
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/habits/habit-1" && init?.method === "PATCH") {
+        return jsonResponse({
+          habitId: "habit-1",
+          habitTeamId: "team-1",
+          creatorId: "user-123",
+          name: "Hydrate Better",
+          goal: "10",
+          habitState: "active",
+          expiryDate: "2026-12-31T00:00:00Z",
+          habitType: "quantitative",
+          unit: "cups",
         });
+      }
 
-        expect(createButton).toBeInTheDocument();
-        expect(createButton).toBeDisabled();
+      throw new Error(`Unhandled fetch URL: ${url}`);
     });
 
-    it("renders static habit content blocks", () => {
-        render(<HabitsPage />);
+    render(<HabitsPage />);
 
-        expect(screen.getByText(/habit overview/i)).toBeInTheDocument();
-        expect(screen.getByText(/habit management/i)).toBeInTheDocument();
+    expect(await screen.findByText("Hydrate")).toBeInTheDocument();
 
-        const buttons = screen.getAllByRole("button");
-        expect(buttons.length).toBeGreaterThanOrEqual(3);
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+
+    expect(await screen.findByText(/edit habit/i)).toBeInTheDocument();
+
+    const inputs = document.querySelectorAll("input");
+    fireEvent.change(inputs[0], { target: { value: "Hydrate Better" } });
+    fireEvent.change(inputs[2], { target: { value: "10" } });
+
+    fireEvent.click(screen.getByText(/save changes/i));
+
+    expect(await screen.findByText(/habit updated successfully/i)).toBeInTheDocument();
+    expect(await screen.findByText("Hydrate Better")).toBeInTheDocument();
+
+    const patchCall = mockFetch.mock.calls.find(
+      ([url, init]) =>
+        String(url) === "http://test/api/habits/habit-1" &&
+        (init as RequestInit)?.method === "PATCH"
+    );
+
+    expect(patchCall).toBeTruthy();
+
+    const parsedBody = JSON.parse((patchCall?.[1] as RequestInit).body as string);
+    expect(parsedBody.name).toBe("Hydrate Better");
+    expect(parsedBody.habitType).toBe("value");
+    expect(parsedBody.goal).toBe("10");
+    expect(parsedBody.unit).toBe("cups");
+  });
+
+  it("archives a habit through the real apiFetch flow and moves it to archived tab", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "http://test/api/habits?memberId=user-123") {
+        return jsonResponse([
+          {
+            habitId: "habit-1",
+            habitTeamId: "team-1",
+            creatorId: "user-123",
+            name: "Hydrate",
+            goal: "8",
+            habitState: "active",
+            expiryDate: "2026-12-31T00:00:00Z",
+            habitType: "quantitative",
+            unit: "cups",
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/habits/habit-1/archive" && init?.method === "POST") {
+        return jsonResponse({
+          habitId: "habit-1",
+          habitTeamId: "team-1",
+          creatorId: "user-123",
+          name: "Hydrate",
+          goal: "8",
+          habitState: "archived",
+          expiryDate: "2026-12-31T00:00:00Z",
+          habitType: "quantitative",
+          unit: "cups",
+        });
+      }
+
+      throw new Error(`Unhandled fetch URL: ${url}`);
     });
+
+    render(<HabitsPage />);
+
+    expect(await screen.findByText("Hydrate")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^archive$/i }));
+
+    expect(await screen.findByText(/habit archived successfully/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /archived habits/i }));
+
+    expect(await screen.findByText("Hydrate")).toBeInTheDocument();
+  });
+
+  it("deletes a habit through the real apiFetch flow and removes it from the list", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "http://test/api/habits?memberId=user-123") {
+        return jsonResponse([
+          {
+            habitId: "habit-1",
+            habitTeamId: "team-1",
+            creatorId: "user-123",
+            name: "Hydrate",
+            goal: "8",
+            habitState: "active",
+            expiryDate: "2026-12-31T00:00:00Z",
+            habitType: "quantitative",
+            unit: "cups",
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/habits/habit-1" && init?.method === "DELETE") {
+        return {
+          ok: true,
+          status: 204,
+          headers: { get: () => null },
+        };
+      }
+
+      throw new Error(`Unhandled fetch URL: ${url}`);
+    });
+
+    render(<HabitsPage />);
+
+    expect(await screen.findByText("Hydrate")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    expect(await screen.findByText(/habit deleted successfully/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.queryByText("Hydrate")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/no active habits yet/i)).toBeInTheDocument();
+  });
+
+  it("shows the real apiFetch error when loading habits fails", async () => {
+    mockFetch.mockResolvedValueOnce(textResponse("Failed from server", 500));
+
+    render(<HabitsPage />);
+
+    expect(await screen.findByText("Failed from server")).toBeInTheDocument();
+  });
+
+  it("shows user-id error when no token is available for the real getCurrentUserId flow", async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+
+    render(<HabitsPage />);
+
+    expect(await screen.findByText(/could not determine current user/i)).toBeInTheDocument();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
