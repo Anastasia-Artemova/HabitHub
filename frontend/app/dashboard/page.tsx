@@ -23,6 +23,7 @@ import {
 import NotificationDropdown from "../notifications/NotificationDropdown";
 import { Habit, HabitEntryRequest, HabitEntryResponse, HabitResponseDto } from "../dto/Habit";
 import { mapHabit } from "../auxiliary/mapHabit";
+import { set } from "zod";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
@@ -391,6 +392,30 @@ export default function HomePage() {
         setHabitsError("");
         const data = await fetchHabitsForMember(currentUserId);
         setHabits(data);
+        
+        const today = new Date().toISOString().split("T")[0];
+
+        const entriesPerHabit = await Promise.all(
+          data.map(async (habit) => {
+            const entries = await apiFetch<HabitEntryResponse[]>(
+              `/api/habits/${habit.id}/entries?date=${today}`,
+              { method: "GET" }
+            );
+
+            return { habitId: habit.id, entries };
+          })
+        );
+
+        const nextCompletedIds = new Set<string>();
+
+        for (const { habitId, entries } of entriesPerHabit) {
+          if (entries.some((entry) => entry.status === "Logged")) {
+            nextCompletedIds.add(habitId);
+          }
+        }
+
+        setCompletedIds(nextCompletedIds);
+
         hasFetchedRef.current = true;
       } catch (err) {
         setHabitsError(err instanceof Error ? err.message : "Failed to load habits.");
