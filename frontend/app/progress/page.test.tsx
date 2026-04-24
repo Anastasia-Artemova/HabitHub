@@ -167,7 +167,7 @@ describe("ProgressPage integration-style tests", () => {
     expect(await screen.findByText("Drink Water")).toBeInTheDocument();
     expect(await screen.findByText("Read Book")).toBeInTheDocument();
 
-    expect(screen.getByText("value")).toBeInTheDocument();
+    expect(screen.getByText("quantitative")).toBeInTheDocument();
     expect(screen.getByText("binary")).toBeInTheDocument();
     expect(screen.getByText("Goal: 8 cups")).toBeInTheDocument();
     expect(screen.getByText("Drink Water Logs")).toBeInTheDocument();

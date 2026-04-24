@@ -202,7 +202,7 @@ function HabitFormModal({
     setForm(initialData);
   }, [initialData]);
 
-  const isValueType = form.type === "value";
+  const isValueType = form.type === "quantitative";
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -279,7 +279,7 @@ function HabitFormModal({
                       className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-emerald-400/40"
                     >
                       <option value="binary" className="bg-[#0B1018]">Binary</option>
-                      <option value="value" className="bg-[#0B1018]">Value</option>
+                      <option value="quantitative" className="bg-[#0B1018]">Quantitative</option>
                     </select>
                   </div>
 
@@ -427,8 +427,8 @@ export default function HabitsPage() {
       const payload: UpdateHabitRequestDto = {
         name: data.name.trim(),
         habitType: data.type,
-        goal: data.type === "value" && data.goal ? data.goal : null,
-        unit: data.type === "value" ? data.unit.trim() || null : null,
+        goal: data.type === "quantitative" && data.goal ? data.goal : null,
+        unit: data.type === "quantitative" ? data.unit.trim() || null : null,
         expiryDate: data.endDate ? new Date(data.endDate).toISOString() : null,
       };
 

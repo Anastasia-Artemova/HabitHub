@@ -231,7 +231,7 @@ describe("HabitsPage integration-style tests", () => {
 
     const parsedBody = JSON.parse((patchCall?.[1] as RequestInit).body as string);
     expect(parsedBody.name).toBe("Hydrate Better");
-    expect(parsedBody.habitType).toBe("value");
+    expect(parsedBody.habitType).toBe("quantitative");
     expect(parsedBody.goal).toBe("10");
     expect(parsedBody.unit).toBe("cups");
   });

@@ -479,7 +479,7 @@ export default function HomePage() {
     if (!selectedHabit) return;
 
     const body =
-      selectedHabit.type === "value"
+      selectedHabit.type === "quantitative"
         ? {
             status: logStatus,
             value: logValue === "" ? null : Number(logValue),
@@ -707,7 +707,7 @@ export default function HomePage() {
                           <p className="mt-1 text-sm text-white/45">
                             {done
                               ? "Completed today"
-                              : habit.type === "value" && habit.goal
+                              : habit.type === "quantitative" && habit.goal
                                 ? `Target: ${habit.goal}${habit.unit ? ` ${habit.unit}` : ""}`
                                 : "Still in progress"}
                           </p>
@@ -771,7 +771,7 @@ export default function HomePage() {
                         </select>
                       </div>
 
-                      {selectedHabit.type === "value" && (
+                      {selectedHabit.type === "quantitative" && (
                         <div>
                           <label className="mb-2 block text-sm text-white/70">
                             Value {selectedHabit.unit ? `(${selectedHabit.unit})` : ""}

@@ -3,11 +3,11 @@ import type { HabitResponseDto } from "../dto/Habit";
 
 describe("mapHabitType", () => {
   it("maps string 'quantitative' to 'value'", () => {
-    expect(mapHabitType("quantitative")).toBe("value");
+    expect(mapHabitType("quantitative")).toBe("quantitative");
   });
 
-  it("maps string 'Quantitative' to 'value' (case insensitive)", () => {
-    expect(mapHabitType("Quantitative")).toBe("value");
+  it("maps string 'Quantitative' to 'quantitative' (case insensitive)", () => {
+    expect(mapHabitType("Quantitative")).toBe("quantitative");
   });
 
   it("maps string 'binary' to 'binary'", () => {
@@ -18,8 +18,8 @@ describe("mapHabitType", () => {
     expect(mapHabitType("something")).toBe("binary");
   });
 
-  it("maps number 1 to 'value'", () => {
-    expect(mapHabitType(1)).toBe("value");
+  it("maps number 1 to 'quantitative'", () => {
+    expect(mapHabitType(1)).toBe("quantitative");
   });
 
   it("maps number 0 to 'binary'", () => {
@@ -82,7 +82,7 @@ describe("mapHabit", () => {
       habitTeamId: "team-1",
       creatorId: "user-1",
       name: "Walk 10k steps",
-      type: "value",
+      type: "quantitative",
       goal: "10000",
       unit: "steps",
       endDate: "2026-12-31T00:00:00Z",

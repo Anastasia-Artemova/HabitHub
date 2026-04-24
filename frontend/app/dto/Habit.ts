@@ -1,5 +1,5 @@
 export type HabitStatus = "active" | "archived";
-export type HabitType = "binary" | "value";
+export type HabitType = "binary" | "quantitative";
 export type EntryStatus = "Logged" | "Pending" | "Skipped";
 
 //  habitType: number | string;

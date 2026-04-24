@@ -2,10 +2,10 @@ import { Habit, HabitResponseDto, HabitStatus, HabitType } from "../dto/Habit";
 
 export function mapHabitType(value: number | string): HabitType {
   if (typeof value === "string") {
-    return value.toLowerCase() === "quantitative" ? "value" : "binary";
+    return value.toLowerCase() === "quantitative" ? "quantitative" : "binary";
   }
 
-  return value === 1 ? "value" : "binary";
+  return value === 1 ? "quantitative" : "binary";
 }
 
 export function mapHabitState(value: number | string): HabitStatus {
