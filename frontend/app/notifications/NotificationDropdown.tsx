@@ -24,10 +24,6 @@ export default function NotificationDropdown({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!loadOnMount) {
-      return;
-    }
-
     let cancelled = false;
 
     async function loadNotifications() {
@@ -53,7 +49,7 @@ export default function NotificationDropdown({
       cancelled = true;
       window.removeEventListener("focus", loadNotifications);
     };
-  }, [loadOnMount]);
+  }, []);
 
   async function markAsRead(notificationId: string) {
     const notification = notifications.find((n) => n.notificationId === notificationId);

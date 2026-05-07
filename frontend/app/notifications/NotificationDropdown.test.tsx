@@ -51,38 +51,38 @@ describe("NotificationDropdown", () => {
   });
 
   it("renders the bell icon", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     expect(getBellTrigger()).toBeInTheDocument();
     expect(await screen.findByText("2")).toBeInTheDocument();
   });
 
   it("shows unread count badge", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     expect(await screen.findByText("2")).toBeInTheDocument();
   });
 
   it("dropdown is closed by default", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     expect(await screen.findByText("2")).toBeInTheDocument();
     expect(screen.queryByText("Notifications")).not.toBeInTheDocument();
   });
 
   it("opens dropdown when bell is clicked", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     fireEvent.click(getBellTrigger());
     expect(screen.getByText("Notifications")).toBeInTheDocument();
     expect(await screen.findByText("2")).toBeInTheDocument();
   });
 
   it("displays notification content when opened", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     fireEvent.click(getBellTrigger());
     expect(await screen.findByText("Password changed successfully")).toBeInTheDocument();
     expect(await screen.findByText("Email updated successfully")).toBeInTheDocument();
   });
 
   it("decreases unread count when a notification is clicked", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     expect(await screen.findByText("2")).toBeInTheDocument();
 
     fireEvent.click(getBellTrigger());
@@ -94,7 +94,7 @@ describe("NotificationDropdown", () => {
   });
 
   it("closes dropdown when clicking trigger again", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     fireEvent.click(getBellTrigger());
     expect(screen.getByText("Notifications")).toBeInTheDocument();
     expect(await screen.findByText("2")).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe("NotificationDropdown", () => {
   });
 
   it("closes dropdown when clicking outside", async () => {
-    render(<NotificationDropdown loadOnMount />);
+    render(<NotificationDropdown />);
     fireEvent.click(getBellTrigger());
     expect(screen.getByText("Notifications")).toBeInTheDocument();
     expect(await screen.findByText("2")).toBeInTheDocument();
