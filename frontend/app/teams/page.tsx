@@ -28,6 +28,7 @@ import {
 import { mapHabit } from "../auxiliary/mapHabit";
 import { apiFetch } from "../auxiliary/apiFetch";
 import { getCurrentUserId } from "../auxiliary/getCurrentUserId";
+import NotificationDropdown from "../notifications/NotificationDropdown";
 
 type TeamMember = {
   memberId?: string;
@@ -611,9 +612,7 @@ export default function TeamsPage() {
           </div>
 
           <div className="flex items-center gap-3 self-start lg:self-auto">
-            <IconButton href="/notifications">
-              <Bell className="h-5 w-5" />
-            </IconButton>
+            <NotificationDropdown />
             <IconButton href="/sessions">
               <Clock3 className="h-5 w-5" />
             </IconButton>

@@ -65,7 +65,7 @@ function jsonResponse(data: unknown, status = 200) {
 
 function textResponse(text: string, status = 500) {
   return {
-    ok: false,
+    ok: status >= 200 && status < 300,
     status,
     headers: {
       get: (key: string) =>
