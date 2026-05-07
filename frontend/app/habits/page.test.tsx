@@ -171,6 +171,10 @@ describe("HabitsPage integration-style tests", () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
       if (url === "http://test/api/habits?memberId=user-123") {
         return jsonResponse([
           {
@@ -240,6 +244,10 @@ describe("HabitsPage integration-style tests", () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
       if (url === "http://test/api/habits?memberId=user-123") {
         return jsonResponse([
           {
@@ -289,6 +297,10 @@ describe("HabitsPage integration-style tests", () => {
   it("deletes a habit through the real apiFetch flow and removes it from the list", async () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
 
       if (url === "http://test/api/habits?memberId=user-123") {
         return jsonResponse([

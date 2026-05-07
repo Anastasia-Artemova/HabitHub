@@ -110,6 +110,10 @@ describe("TeamsPage integration-style tests", () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
 
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
       if (url === "http://test/api/teams") {
         return jsonResponse([
           {
@@ -195,6 +199,10 @@ describe("TeamsPage integration-style tests", () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
       if (url === "http://test/api/teams" && (!init?.method || init.method === "GET")) {
         if (
           mockFetch.mock.calls.filter((call) => String(call[0]) === "http://test/api/teams")
@@ -264,6 +272,10 @@ describe("TeamsPage integration-style tests", () => {
   it("joins a team through the real apiFetch flow and reloads teams", async () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
 
       if (url === "http://test/api/teams" && (!init?.method || init.method === "GET")) {
         if (
@@ -341,6 +353,10 @@ describe("TeamsPage integration-style tests", () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
       if (url === "http://test/api/teams") {
         return jsonResponse([
           {
@@ -398,6 +414,10 @@ describe("TeamsPage integration-style tests", () => {
   it("creates a team habit through the real apiFetch flow and refreshes the habit list", async () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
 
       if (url === "http://test/api/teams") {
         return jsonResponse([
