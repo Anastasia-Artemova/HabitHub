@@ -534,10 +534,22 @@ describe("TeamsPage integration-style tests", () => {
   });
 
   it("shows the backend message when loading teams fails", async () => {
-    mockFetch.mockResolvedValueOnce(textResponse("Teams load failed", 500));
-
-    render(<TeamsPage />);
-
-    expect(await screen.findByText("Teams load failed")).toBeInTheDocument();
+  mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    
+    if (url === "http://test/api/notifications") {
+      return jsonResponse([]);
+    }
+    
+    if (url === "http://test/api/teams") {
+      return textResponse("Teams load failed", 500);
+    }
+    
+    throw new Error(`Unhandled fetch URL: ${url}`);
   });
+
+  render(<TeamsPage />);
+
+  expect(await screen.findByText("Teams load failed")).toBeInTheDocument();
+});
 });

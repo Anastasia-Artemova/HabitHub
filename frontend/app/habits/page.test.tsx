@@ -345,13 +345,24 @@ describe("HabitsPage integration-style tests", () => {
   });
 
   it("shows the real apiFetch error when loading habits fails", async () => {
-    mockFetch.mockResolvedValueOnce(textResponse("Failed from server", 500));
-
-    render(<HabitsPage />);
-
-    expect(await screen.findByText("Failed from server")).toBeInTheDocument();
+  mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    
+    if (url === "http://test/api/notifications") {
+      return jsonResponse([]);
+    }
+    
+    if (url === "http://test/api/habits?memberId=user-123") {
+      return textResponse("Failed from server", 500);
+    }
+    
+    throw new Error(`Unhandled fetch URL: ${url}`);
   });
 
+  render(<HabitsPage />);
+
+  expect(await screen.findByText("Failed from server")).toBeInTheDocument();
+});
   it("shows user-id error when no token is available for the real getCurrentUserId flow", async () => {
     localStorage.clear();
     sessionStorage.clear();
