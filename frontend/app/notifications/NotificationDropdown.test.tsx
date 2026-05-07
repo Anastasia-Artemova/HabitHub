@@ -1,5 +1,10 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import NotificationDropdown from "./NotificationDropdown";
+import { apiFetch } from "../auxiliary/apiFetch";
+
+jest.mock("../auxiliary/apiFetch", () => ({
+  apiFetch: jest.fn(),
+}));
 
 jest.mock("framer-motion", () => {
   const React = require("react");
@@ -22,14 +27,37 @@ function getBellTrigger() {
 }
 
 describe("NotificationDropdown", () => {
+  beforeEach(() => {
+    jest.mocked(apiFetch).mockImplementation(async (endpoint) => {
+      if (String(endpoint).endsWith("/read")) {
+        return undefined;
+      }
+
+      return [
+        {
+          notificationId: "1",
+          content: "Password changed successfully",
+          createdAt: "2026-05-07T18:20:00Z",
+          read: false,
+        },
+        {
+          notificationId: "2",
+          content: "Email updated successfully",
+          createdAt: "2026-05-07T18:21:00Z",
+          read: false,
+        },
+      ];
+    });
+  });
+
   it("renders the bell icon", () => {
     render(<NotificationDropdown />);
     expect(getBellTrigger()).toBeInTheDocument();
   });
 
-  it("shows unread count badge", () => {
+  it("shows unread count badge", async () => {
     render(<NotificationDropdown />);
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(await screen.findByText("2")).toBeInTheDocument();
   });
 
   it("dropdown is closed by default", () => {
@@ -43,11 +71,23 @@ describe("NotificationDropdown", () => {
     expect(screen.getByText("Notifications")).toBeInTheDocument();
   });
 
-  it("displays notification content when opened", () => {
+  it("displays notification content when opened", async () => {
     render(<NotificationDropdown />);
     fireEvent.click(getBellTrigger());
-    expect(screen.getByText("Password changed successfully")).toBeInTheDocument();
-    expect(screen.getByText("Email updated successfully")).toBeInTheDocument();
+    expect(await screen.findByText("Password changed successfully")).toBeInTheDocument();
+    expect(await screen.findByText("Email updated successfully")).toBeInTheDocument();
+  });
+
+  it("decreases unread count when a notification is clicked", async () => {
+    render(<NotificationDropdown />);
+    expect(await screen.findByText("2")).toBeInTheDocument();
+
+    fireEvent.click(getBellTrigger());
+    fireEvent.click(await screen.findByText("Password changed successfully"));
+
+    await waitFor(() => {
+      expect(screen.getByText("1")).toBeInTheDocument();
+    });
   });
 
   it("closes dropdown when clicking trigger again", () => {
