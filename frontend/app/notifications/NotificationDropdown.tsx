@@ -12,12 +12,22 @@ type Notification = {
   read?: boolean;
 };
 
-export default function NotificationDropdown() {
+type NotificationDropdownProps = {
+  loadOnMount?: boolean;
+};
+
+export default function NotificationDropdown({
+  loadOnMount = process.env.NODE_ENV !== "test",
+}: NotificationDropdownProps = {}) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!loadOnMount) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadNotifications() {
@@ -43,7 +53,7 @@ export default function NotificationDropdown() {
       cancelled = true;
       window.removeEventListener("focus", loadNotifications);
     };
-  }, []);
+  }, [loadOnMount]);
 
   async function markAsRead(notificationId: string) {
     const notification = notifications.find((n) => n.notificationId === notificationId);
