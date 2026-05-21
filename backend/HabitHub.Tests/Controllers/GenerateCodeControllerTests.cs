@@ -330,4 +330,190 @@ public class TeamInviteCodesControllerTests
         Assert.NotNull(refreshedInvite);
         Assert.Equal(CodeState.Active, refreshedInvite!.CodeStatus);
     }
+
+    // ── GetInviteCodes tests ─────────────────────────────────────
+
+    [Fact]
+    public async Task GetInviteCodes_WithoutAuth_ReturnsUnauthorized()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetUnauthenticatedUser(controller);
+
+        var result = await controller.GetInviteCodes(Guid.NewGuid());
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    [Fact]
+    public async Task GetInviteCodes_WhenTeamMissing_ReturnsNotFound()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var controller = new GenerateCodeController(db);
+        var me = TestHelper.SeedMember(db);
+        TestHelper.SetAuthenticatedUser(controller, me.MemberId);
+
+        var result = await controller.GetInviteCodes(Guid.NewGuid());
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetInviteCodes_WhenNotCreator_ReturnsForbid()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var member = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId, extraMemberIds: new[] { member.MemberId });
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetAuthenticatedUser(controller, member.MemberId);
+
+        var result = await controller.GetInviteCodes(team.HabitTeamId);
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+    public async Task GetInviteCodes_ReturnsOnlyActiveCodesForTeam()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId);
+        TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Active);
+        TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Active);
+        TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Expired);
+        TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Invalid);
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetAuthenticatedUser(controller, creator.MemberId);
+
+        var result = await controller.GetInviteCodes(team.HabitTeamId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var codes = Assert.IsAssignableFrom<List<CodeResponse>>(ok.Value);
+        Assert.Equal(2, codes.Count);
+        Assert.All(codes, c => Assert.Equal(CodeState.Active, c.CodeStatus));
+    }
+
+    // ── InvalidateInviteCode tests ───────────────────────────────
+
+    [Fact]
+    public async Task InvalidateInviteCode_WithoutAuth_ReturnsUnauthorized()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetUnauthenticatedUser(controller);
+
+        var result = await controller.InvalidateInviteCode(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    [Fact]
+    public async Task InvalidateInviteCode_WhenTeamMissing_ReturnsNotFound()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var controller = new GenerateCodeController(db);
+        var me = TestHelper.SeedMember(db);
+        TestHelper.SetAuthenticatedUser(controller, me.MemberId);
+
+        var result = await controller.InvalidateInviteCode(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task InvalidateInviteCode_WhenNotCreator_ReturnsForbid()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var member = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId, extraMemberIds: new[] { member.MemberId });
+        var invite = TestHelper.SeedInviteCode(db, team.HabitTeamId);
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetAuthenticatedUser(controller, member.MemberId);
+
+        var result = await controller.InvalidateInviteCode(team.HabitTeamId, invite.InviteCodeId);
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+    public async Task InvalidateInviteCode_WhenCodeNotFound_ReturnsNotFound()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId);
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetAuthenticatedUser(controller, creator.MemberId);
+
+        var result = await controller.InvalidateInviteCode(team.HabitTeamId, Guid.NewGuid());
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task InvalidateInviteCode_WhenAlreadyExpired_ReturnsConflict()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId);
+        var invite = TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Expired);
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetAuthenticatedUser(controller, creator.MemberId);
+
+        var result = await controller.InvalidateInviteCode(team.HabitTeamId, invite.InviteCodeId);
+
+        Assert.IsType<ConflictObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task InvalidateInviteCode_WhenAlreadyInvalid_ReturnsConflict()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId);
+        var invite = TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Invalid);
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetAuthenticatedUser(controller, creator.MemberId);
+
+        var result = await controller.InvalidateInviteCode(team.HabitTeamId, invite.InviteCodeId);
+
+        Assert.IsType<ConflictObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task InvalidateInviteCode_HappyPath_MarksAsInvalidAndReturnsNoContent()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId);
+        var invite = TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Active);
+        var controller = new GenerateCodeController(db);
+        TestHelper.SetAuthenticatedUser(controller, creator.MemberId);
+
+        var result = await controller.InvalidateInviteCode(team.HabitTeamId, invite.InviteCodeId);
+
+        Assert.IsType<NoContentResult>(result);
+        var refreshed = await db.InviteCodes.FindAsync(invite.InviteCodeId);
+        Assert.Equal(CodeState.Invalid, refreshed!.CodeStatus);
+    }
+
+    [Fact]
+    public async Task InvalidateInviteCode_InvalidatedCodeCannotBeUsedToJoin()
+    {
+        var db = TestHelper.CreateInMemoryDbContext();
+        var creator = TestHelper.SeedMember(db);
+        var joiner = TestHelper.SeedMember(db);
+        var team = TestHelper.SeedTeam(db, creator.MemberId);
+        var invite = TestHelper.SeedInviteCode(db, team.HabitTeamId, status: CodeState.Active);
+        var controller = new GenerateCodeController(db);
+
+        TestHelper.SetAuthenticatedUser(controller, creator.MemberId);
+        await controller.InvalidateInviteCode(team.HabitTeamId, invite.InviteCodeId);
+
+        TestHelper.SetAuthenticatedUser(controller, joiner.MemberId);
+        var joinResult = await controller.JoinTeam(new JoinTeamRequest { Code = invite.Code });
+
+        Assert.IsType<ConflictObjectResult>(joinResult);
+    }
 }

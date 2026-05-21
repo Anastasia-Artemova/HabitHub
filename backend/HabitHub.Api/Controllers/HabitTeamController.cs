@@ -5,10 +5,10 @@ using HabitHub.Api.Contracts.Team;
 using HabitHub.Api.Data;
 using HabitHub.Api.Enums;
 using HabitHub.Api.Models;
+using HabitHub.Api.Util;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using HabitHub.Api.Util;
 
 [ApiController]
 [Authorize]
@@ -32,10 +32,15 @@ public class HabitTeamController : ControllerBase
         var teams = await _context.HabitTeams
             .Include(t => t.Memberships)
                 .ThenInclude(m => m.Member)
-            .Where(t => t.Memberships.Any(m => m.MemberId == userId.Value))
+            .Where(t =>
+                t.CreatorId == userId.Value ||
+                t.Memberships.Any(m =>
+                    m.MemberId == userId.Value &&
+                    m.Status == MembershipStatus.Active))
             .ToListAsync();
 
         var teamResponses = teams.Select(MapTeamResponse).ToList();
+
         return Ok(teamResponses);
     }
 
@@ -54,11 +59,31 @@ public class HabitTeamController : ControllerBase
         if (team == null)
             return NotFound();
 
-        var isMember = team.Memberships.Any(m => m.MemberId == userId.Value);
-        if (!isMember)
+        if (!CanAccessTeam(team, userId.Value))
             return Forbid();
 
         return Ok(MapTeamResponse(team));
+    }
+
+    [HttpGet("{teamId:guid}/members")]
+    public async Task<ActionResult<List<TeamMemberResponse>>> GetTeamMembers([FromRoute] Guid teamId)
+    {
+        var userId = GetCurrentUserId.GetUserId(User);
+        if (userId == null)
+            return Unauthorized();
+
+        var team = await _context.HabitTeams
+            .Include(t => t.Memberships)
+                .ThenInclude(m => m.Member)
+            .FirstOrDefaultAsync(t => t.HabitTeamId == teamId);
+
+        if (team == null)
+            return NotFound("not-found");
+
+        if (!CanAccessTeam(team, userId.Value))
+            return Forbid();
+
+        return Ok(MapActiveMembers(team));
     }
 
     [HttpPost]
@@ -67,6 +92,9 @@ public class HabitTeamController : ControllerBase
         var userId = GetCurrentUserId.GetUserId(User);
         if (userId == null)
             return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return BadRequest("validation-error");
 
         var creator = await _context.Members.FindAsync(userId.Value);
         if (creator == null)
@@ -83,7 +111,7 @@ public class HabitTeamController : ControllerBase
         var team = new HabitTeam
         {
             HabitTeamId = teamId,
-            Name = request.Name,
+            Name = request.Name.Trim(),
             CreatorId = userId.Value,
             Creator = creator,
             Chat = chat
@@ -112,11 +140,16 @@ public class HabitTeamController : ControllerBase
                 .ThenInclude(m => m.Member)
             .FirstAsync(t => t.HabitTeamId == teamId);
 
-        return CreatedAtAction(nameof(GetTeam), new { teamId = createdTeam.HabitTeamId }, MapTeamResponse(createdTeam));
+        return CreatedAtAction(
+            nameof(GetTeam),
+            new { teamId = createdTeam.HabitTeamId },
+            MapTeamResponse(createdTeam));
     }
 
     [HttpPost("{teamId:guid}/members/{memberId:guid}/kick")]
-    public async Task<ActionResult<TeamResponse>> KickMember([FromRoute] Guid teamId, [FromRoute] Guid memberId)
+    public async Task<ActionResult<TeamResponse>> KickMember(
+        [FromRoute] Guid teamId,
+        [FromRoute] Guid memberId)
     {
         var userId = GetCurrentUserId.GetUserId(User);
         if (userId == null)
@@ -135,6 +168,9 @@ public class HabitTeamController : ControllerBase
 
         if (team.CreatorId != userId.Value)
             return Forbid();
+
+        if (team.CreatorId == memberId)
+            return Conflict("cannot-kick-self");
 
         var membership = team.Memberships.FirstOrDefault(m =>
             m.MemberId == memberId &&
@@ -205,6 +241,14 @@ public class HabitTeamController : ControllerBase
         return NoContent();
     }
 
+    private static bool CanAccessTeam(HabitTeam team, Guid userId)
+    {
+        return team.CreatorId == userId ||
+               team.Memberships.Any(m =>
+                   m.MemberId == userId &&
+                   m.Status == MembershipStatus.Active);
+    }
+
     private static TeamResponse MapTeamResponse(HabitTeam team)
     {
         return new TeamResponse
@@ -212,14 +256,22 @@ public class HabitTeamController : ControllerBase
             HabitTeamId = team.HabitTeamId,
             Name = team.Name,
             CreatorId = team.CreatorId,
-            Members = team.Memberships.Select(m => new TeamMemberResponse
+            Members = MapActiveMembers(team)
+        };
+    }
+
+    private static List<TeamMemberResponse> MapActiveMembers(HabitTeam team)
+    {
+        return team.Memberships
+            .Where(m => m.Status == MembershipStatus.Active)
+            .Select(m => new TeamMemberResponse
             {
                 MemberId = m.MemberId,
                 Name = m.Member.Name,
                 Email = m.Member.Email,
                 Role = m.Role,
                 Status = m.Status
-            }).ToList()
-        };
+            })
+            .ToList();
     }
 }
