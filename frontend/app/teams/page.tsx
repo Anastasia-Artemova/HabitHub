@@ -14,6 +14,7 @@ import {
   UserMinus,
   Target,
   MessageCircle,
+  ShieldOff,
 } from "lucide-react";
 import {
   Habit,
@@ -50,9 +51,11 @@ type TeamResponse = {
 };
 
 type InviteCodeResponse = {
+  inviteCodeId: string;
   code: string;
   expiryDate: string;
   habitTeamId: string;
+  codeStatus: string;
 };
 
 
@@ -97,6 +100,18 @@ async function createInviteCode(teamId: string): Promise<InviteCodeResponse> {
   return apiFetch<InviteCodeResponse>(`/api/teams/${teamId}/invite-codes`, {
     method: "POST",
     body: JSON.stringify({}),
+  });
+}
+
+async function fetchActiveInviteCodes(teamId: string): Promise<InviteCodeResponse[]> {
+  return apiFetch<InviteCodeResponse[]>(`/api/teams/${teamId}/invite-codes`, {
+    method: "GET",
+  });
+}
+
+async function invalidateInviteCode(teamId: string, codeId: string): Promise<void> {
+  await apiFetch<void>(`/api/teams/${teamId}/invite-codes/${codeId}`, {
+    method: "DELETE",
   });
 }
 
@@ -183,6 +198,9 @@ export default function TeamsPage() {
   const [kickingId, setKickingId] = useState<string | null>(null);
 
   const [inviteResult, setInviteResult] = useState<InviteCodeResponse | null>(null);
+  const [activeInviteCodes, setActiveInviteCodes] = useState<InviteCodeResponse[]>([]);
+  const [loadingCodes, setLoadingCodes] = useState(false);
+  const [invalidatingId, setInvalidatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -268,6 +286,14 @@ export default function TeamsPage() {
     void loadTeamHabits(selectedTeamId);
   }, [selectedTeamId]);
 
+  useEffect(() => {
+    if (selectedTeam && isCreator) {
+      void loadActiveInviteCodes(selectedTeam.habitTeamId);
+    } else {
+      setActiveInviteCodes([]);
+    }
+  }, [selectedTeam, isCreator]);
+
   async function handleCreateTeam() {
     if (!createName.trim()) {
       setError("Team name is required.");
@@ -319,6 +345,7 @@ export default function TeamsPage() {
     try {
       const result = await createInviteCode(selectedTeam.habitTeamId);
       setInviteResult(result);
+      await loadActiveInviteCodes(selectedTeam.habitTeamId);
       flashSuccess("Invite code generated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate invite code.");
@@ -382,6 +409,38 @@ export default function TeamsPage() {
       flashSuccess("Invite code copied.");
     } catch {
       setError("Could not copy invite code.");
+    }
+  }
+
+  async function loadActiveInviteCodes(teamId: string) {
+    setLoadingCodes(true);
+    try {
+      const codes = await fetchActiveInviteCodes(teamId);
+      setActiveInviteCodes(codes);
+    } catch {
+      setActiveInviteCodes([]);
+    } finally {
+      setLoadingCodes(false);
+    }
+  }
+
+  async function handleInvalidateCode(codeId: string) {
+    if (!selectedTeam) return;
+
+    setInvalidatingId(codeId);
+    setError(null);
+
+    try {
+      await invalidateInviteCode(selectedTeam.habitTeamId, codeId);
+      setActiveInviteCodes((prev) => prev.filter((c) => c.inviteCodeId !== codeId));
+      if (inviteResult?.inviteCodeId === codeId) {
+        setInviteResult(null);
+      }
+      flashSuccess("Invite code invalidated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to invalidate invite code.");
+    } finally {
+      setInvalidatingId(null);
     }
   }
 
@@ -992,6 +1051,41 @@ export default function TeamsPage() {
                                 </div>
                               )}
                             </>
+                          )}
+
+                          {isCreator && activeInviteCodes.length > 0 && (
+                            <div className="rounded-[20px] border border-white/10 bg-black/20 p-4">
+                              <p className="text-xs uppercase tracking-[0.16em] text-white/40 mb-3">
+                                Active Invite Codes ({activeInviteCodes.length})
+                              </p>
+                              <div className="space-y-3">
+                                {activeInviteCodes.map((code) => (
+                                  <div
+                                    key={code.inviteCodeId}
+                                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-semibold text-white break-all">
+                                        {code.code}
+                                      </p>
+                                      <p className="text-xs text-white/50 mt-1">
+                                        Expires: {new Date(code.expiryDate).toLocaleString()}
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => void handleInvalidateCode(code.inviteCodeId)}
+                                      disabled={invalidatingId === code.inviteCodeId}
+                                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-medium text-rose-300 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <ShieldOff className="h-3.5 w-3.5" />
+                                      {invalidatingId === code.inviteCodeId
+                                        ? "..."
+                                        : "Invalidate"}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           )}
 
                           <button
