@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using HabitHub.Api.Data;
 using HabitHub.Api.Models;
 using HabitHub.Api.Util;
+using HabitHub.Api.Services.Mail;
 
 [Authorize]
 [ApiController]
@@ -14,11 +15,16 @@ public class ProfileController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly PasswordHasher<Member> _passwordHasher;
+    private readonly IMailService _mailService;
 
-    public ProfileController(AppDbContext context, PasswordHasher<Member> passwordHasher)
+    public ProfileController(
+    AppDbContext context,
+    PasswordHasher<Member> passwordHasher,
+    IMailService mailService)
     {
         _context = context;
         _passwordHasher = passwordHasher;
+        _mailService = mailService;
     }
 
     [HttpPut("info")]
@@ -32,20 +38,27 @@ public class ProfileController : ControllerBase
 
         bool updated = false;
 
-        if (!string.IsNullOrWhiteSpace(request.Email))
-        {
+        if (!string.IsNullOrWhiteSpace(request.Email)){
             var email = request.Email.Trim().ToLowerInvariant();
 
             if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
             {
+                var oldEmail = user.Email;
+
                 user.Email = email;
+
                 _context.Notifications.Add(new Notification
                 {
                     NotificationId = Guid.NewGuid(),
                     MemberId = user.MemberId,
                     Content = "Email updated successfully."
                 });
+
                 updated = true;
+
+                await _context.SaveChangesAsync();
+
+                await _mailService.SendEmailChangedEmail(oldEmail, email);
             }
         }
 
@@ -102,14 +115,18 @@ public class ProfileController : ControllerBase
         if (result == PasswordVerificationResult.Failed)
             return BadRequest("Current password is incorrect");
 
-        user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+      user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+
         _context.Notifications.Add(new Notification
         {
             NotificationId = Guid.NewGuid(),
             MemberId = user.MemberId,
             Content = "Password changed successfully"
         });
+
         await _context.SaveChangesAsync();
+
+        await _mailService.SendPasswordChangedEmail(user.Email);
 
         return Ok(new { message = "Password changed successfully" });
     }
