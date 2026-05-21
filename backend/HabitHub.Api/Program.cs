@@ -1,6 +1,7 @@
 using HabitHub.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using HabitHub.Api.Services;
+using HabitHub.Api.Services.Background;
 using Microsoft.AspNetCore.Identity;
 using HabitHub.Api.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -12,7 +13,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options => 
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddControllers();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<PasswordHasher<Member>>();
 
@@ -46,6 +46,8 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddHostedService<AutoArchiveHabitsService>();
 
 builder.Services.AddCors(options =>
 {
