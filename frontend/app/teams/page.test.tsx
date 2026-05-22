@@ -67,6 +67,18 @@ function jsonResponse(data: unknown, status = 200) {
   };
 }
 
+function emptyResponse(status = 204) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: () => null },
+    json: async () => {
+      throw new Error("not json");
+    },
+    text: async () => "",
+  };
+}
+
 function textResponse(text: string, status = 500) {
   return {
     ok: status >= 200 && status < 300,
@@ -110,7 +122,7 @@ describe("TeamsPage integration-style tests", () => {
     });
   });
 
-  it("loads teams, selected team details, and team habits through the real helper chain", async () => {
+  it("loads teams, selected team details, team habits, and active invite codes through the real helper chain", async () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -166,6 +178,18 @@ describe("TeamsPage integration-style tests", () => {
         ]);
       }
 
+      if (url === "http://test/api/teams/team-1/invite-codes") {
+        return jsonResponse([
+          {
+            inviteCodeId: "code-1",
+            code: "ALPHA111",
+            expiryDate: "2026-12-31T10:00:00Z",
+            habitTeamId: "team-1",
+            codeStatus: "Active",
+          },
+        ]);
+      }
+
       if (url === "http://test/api/teams/team-2") {
         return jsonResponse({
           habitTeamId: "team-2",
@@ -191,6 +215,8 @@ describe("TeamsPage integration-style tests", () => {
     expect(screen.getByText((content) => content.includes("Goal: 8"))).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
+    expect(await screen.findByText("ALPHA111")).toBeInTheDocument();
+    expect(screen.getByText(/active invite codes \(1\)/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Bravo Team"));
 
@@ -243,6 +269,10 @@ describe("TeamsPage integration-style tests", () => {
       }
 
       if (url === "http://test/api/teams/team-new/habits") {
+        return jsonResponse([]);
+      }
+
+      if (url === "http://test/api/teams/team-new/invite-codes") {
         return jsonResponse([]);
       }
 
@@ -302,11 +332,7 @@ describe("TeamsPage integration-style tests", () => {
       }
 
       if (url === "http://test/api/teams/join" && init?.method === "POST") {
-        return {
-          ok: true,
-          status: 204,
-          headers: { get: () => null },
-        };
+        return emptyResponse(204);
       }
 
       if (url === "http://test/api/teams/team-join") {
@@ -385,11 +411,35 @@ describe("TeamsPage integration-style tests", () => {
         return jsonResponse([]);
       }
 
+      if (url === "http://test/api/teams/team-1/invite-codes" && (!init?.method || init.method === "GET")) {
+        const getCount = mockFetch.mock.calls.filter(
+          ([u, i]) =>
+            String(u) === "http://test/api/teams/team-1/invite-codes" &&
+            (!i || !(i as RequestInit).method || (i as RequestInit).method === "GET")
+        ).length;
+
+        if (getCount === 1) {
+          return jsonResponse([]);
+        }
+
+        return jsonResponse([
+          {
+            inviteCodeId: "code-new",
+            code: "CODE12345",
+            expiryDate: "2026-12-31T10:00:00Z",
+            habitTeamId: "team-1",
+            codeStatus: "Active",
+          },
+        ]);
+      }
+
       if (url === "http://test/api/teams/team-1/invite-codes" && init?.method === "POST") {
         return jsonResponse({
-          code: "CODE-12345",
+          inviteCodeId: "code-new",
+          code: "CODE12345",
           expiryDate: "2026-12-31T10:00:00Z",
           habitTeamId: "team-1",
+          codeStatus: "Active",
         });
       }
 
@@ -403,17 +453,141 @@ describe("TeamsPage integration-style tests", () => {
     const generateInviteButton = await screen.findByText(/generate invite code/i);
     fireEvent.click(generateInviteButton);
 
-    expect(await screen.findByText("CODE-12345")).toBeInTheDocument();
+    expect(await screen.findAllByText("CODE12345")).toHaveLength(2);
 
     const copyCodeButton = await screen.findByText(/copy code/i);
 
     await act(async () => {
-        fireEvent.click(copyCodeButton);
+      fireEvent.click(copyCodeButton);
     });
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("CODE-12345");
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("CODE12345");
     expect(await screen.findByText(/invite code copied/i)).toBeInTheDocument();
+  });
+
+  it("invalidates an active invite code and removes it from the active code list immediately", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
+      if (url === "http://test/api/teams") {
+        return jsonResponse([
+          {
+            habitTeamId: "team-1",
+            name: "Alpha Team",
+            creatorId: "creator-1",
+            members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/team-1") {
+        return jsonResponse({
+          habitTeamId: "team-1",
+          name: "Alpha Team",
+          creatorId: "creator-1",
+          members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
+        });
+      }
+
+      if (url === "http://test/api/teams/team-1/habits") {
+        return jsonResponse([]);
+      }
+
+      if (url === "http://test/api/teams/team-1/invite-codes" && (!init?.method || init.method === "GET")) {
+        return jsonResponse([
+          {
+            inviteCodeId: "code-1",
+            code: "ALPHA111",
+            expiryDate: "2026-12-31T10:00:00Z",
+            habitTeamId: "team-1",
+            codeStatus: "Active",
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/team-1/invite-codes/code-1" && init?.method === "DELETE") {
+        return emptyResponse(204);
+      }
+
+      throw new Error(`Unhandled fetch URL: ${url}`);
     });
+
+    render(<TeamsPage />);
+
+    expect(await screen.findByText("ALPHA111")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /invalidate/i }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        "http://test/api/teams/team-1/invite-codes/code-1",
+        expect.objectContaining({ method: "DELETE" })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("ALPHA111")).not.toBeInTheDocument();
+    });
+
+    expect(await screen.findByText(/invite code invalidated/i)).toBeInTheDocument();
+  });
+
+  it("does not show active invite codes or invalidate button for non-creator users", async () => {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
+      if (url === "http://test/api/teams") {
+        return jsonResponse([
+          {
+            habitTeamId: "team-2",
+            name: "Bravo Team",
+            creatorId: "owner-2",
+            members: [
+              { memberId: "owner-2", name: "Owner", email: "owner@example.com" },
+              { memberId: "creator-1", name: "Alice", email: "alice@example.com" },
+            ],
+          },
+        ]);
+      }
+
+      if (url === "http://test/api/teams/team-2") {
+        return jsonResponse({
+          habitTeamId: "team-2",
+          name: "Bravo Team",
+          creatorId: "owner-2",
+          members: [
+            { memberId: "owner-2", name: "Owner", email: "owner@example.com" },
+            { memberId: "creator-1", name: "Alice", email: "alice@example.com" },
+          ],
+        });
+      }
+
+      if (url === "http://test/api/teams/team-2/habits") {
+        return jsonResponse([]);
+      }
+
+      throw new Error(`Unhandled fetch URL: ${url}`);
+    });
+
+    render(<TeamsPage />);
+
+    expect(await screen.findByText("Bravo Team")).toBeInTheDocument();
+    expect(screen.queryByText(/active invite codes/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /invalidate/i })).not.toBeInTheDocument();
+
+    const inviteCodesCall = mockFetch.mock.calls.find(
+      ([url]) => String(url) === "http://test/api/teams/team-2/invite-codes"
+    );
+    expect(inviteCodesCall).toBeUndefined();
+  });
 
   it("creates a team habit through the real apiFetch flow and refreshes the habit list", async () => {
     mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -441,6 +615,10 @@ describe("TeamsPage integration-style tests", () => {
           creatorId: "creator-1",
           members: [{ memberId: "creator-1", name: "Alice", email: "alice@example.com" }],
         });
+      }
+
+      if (url === "http://test/api/teams/team-1/invite-codes") {
+        return jsonResponse([]);
       }
 
       if (
@@ -511,7 +689,7 @@ describe("TeamsPage integration-style tests", () => {
     });
 
     fireEvent.change(document.querySelector('input[type="date"]') as HTMLInputElement, {
-        target: { value: "2026-12-31" },
+      target: { value: "2026-12-31" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /create habit for team/i }));
@@ -538,22 +716,22 @@ describe("TeamsPage integration-style tests", () => {
   });
 
   it("shows the backend message when loading teams fails", async () => {
-  mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    
-    if (url === "http://test/api/notifications") {
-      return jsonResponse([]);
-    }
-    
-    if (url === "http://test/api/teams") {
-      return textResponse("Teams load failed", 500);
-    }
-    
-    throw new Error(`Unhandled fetch URL: ${url}`);
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === "http://test/api/notifications") {
+        return jsonResponse([]);
+      }
+
+      if (url === "http://test/api/teams") {
+        return textResponse("Teams load failed", 500);
+      }
+
+      throw new Error(`Unhandled fetch URL: ${url}`);
+    });
+
+    render(<TeamsPage />);
+
+    expect(await screen.findByText("Teams load failed")).toBeInTheDocument();
   });
-
-  render(<TeamsPage />);
-
-  expect(await screen.findByText("Teams load failed")).toBeInTheDocument();
-});
 });

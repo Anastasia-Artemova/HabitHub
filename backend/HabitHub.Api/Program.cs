@@ -1,6 +1,7 @@
 using HabitHub.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using HabitHub.Api.Services;
+using HabitHub.Api.Services.Background;
 using Microsoft.AspNetCore.Identity;
 using HabitHub.Api.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -56,6 +57,10 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddHostedService<AutoArchiveHabitsService>();
+
+builder.Services.AddHostedService<ReminderDispatchService>();
 
 builder.Services.AddCors(options =>
 {
