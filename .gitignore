@@ -23,6 +23,7 @@ backend/**/TestResults/
 # Secrets
 backend/**/appsettings.Development.json
 backend/**/appsettings.Local.json
+backend/.env
 
 # =========================
 # Node / Next.js Frontend

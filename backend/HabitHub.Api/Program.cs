@@ -7,13 +7,24 @@ using HabitHub.Api.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.IO;
+using HabitHub.Api.Services.Mail;
+
+LoadDotEnv();
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<AppDbContext>(options => 
+builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<PasswordHasher<Member>>();
 
 builder.Services.AddOpenApi();
@@ -65,13 +76,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(
-            new System.Text.Json.Serialization.JsonStringEnumConverter());
-    });
-
 var app = builder.Build();
 
 app.MapOpenApi();
@@ -85,7 +89,96 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapGet("/", () => "HabitHub backend is running");
+app.MapGet("/api/email/config", (IConfiguration configuration) =>
+{
+    return Results.Ok(new
+    {
+        SmtpEnabled = configuration["SMTP_ENABLED"],
+        SmtpHost = configuration["Email:SmtpHost"],
+        SmtpPort = configuration["Email:SmtpPort"],
+        SmtpUser = configuration["Email:Username"],
+        From = configuration["Email:From"]
+    });
+});
 
 app.Run();
+
+static void LoadDotEnv()
+{
+    var searchRoots = new[]
+    {
+        Directory.GetCurrentDirectory(),
+        AppContext.BaseDirectory
+    };
+
+    string? envPath = null;
+    foreach (var root in searchRoots)
+    {
+        var current = root;
+        for (var depth = 0; depth < 5; depth++)
+        {
+            var candidate = Path.Combine(current, ".env");
+            if (File.Exists(candidate))
+            {
+                envPath = candidate;
+                break;
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent) || parent == current)
+            {
+                break;
+            }
+
+            current = parent;
+        }
+
+        if (envPath is not null)
+        {
+            break;
+        }
+    }
+
+    if (envPath is null)
+    {
+        return;
+    }
+
+    foreach (var line in File.ReadAllLines(envPath))
+    {
+        var trimmed = line.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#"))
+        {
+            continue;
+        }
+
+        var separatorIndex = trimmed.IndexOf('=');
+        if (separatorIndex < 0)
+        {
+            continue;
+        }
+
+        var key = trimmed[..separatorIndex].Trim();
+        var value = trimmed[(separatorIndex + 1)..].Trim();
+
+        if ((value.StartsWith("\"") && value.EndsWith("\"")) ||
+            (value.StartsWith("'") && value.EndsWith("'")))
+        {
+            value = value[1..^1];
+        }
+
+        var envKey = key switch
+        {
+            "SMTP_HOST" => "Email__SmtpHost",
+            "SMTP_PORT" => "Email__SmtpPort",
+            "SMTP_USER" => "Email__Username",
+            "SMTP_PASSWORD" => "Email__Password",
+            "SMTP_FROM_EMAIL" => "Email__From",
+            _ => key
+        };
+
+        Environment.SetEnvironmentVariable(envKey, value);
+    }
+}
 
 public partial class Program { }

@@ -4,6 +4,8 @@ using HabitHub.Api.Models;
 using HabitHub.Tests.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using HabitHub.Api.Services.Mail;
+using Moq;
 
 namespace HabitHub.Tests.Controllers;
 
@@ -13,7 +15,13 @@ public class ProfileControllerTests
     {
         var db = TestHelper.CreateInMemoryDbContext();
         var hasher = new PasswordHasher<Member>();
-        var controller = new ProfileController(db, hasher);
+        var mailServiceMock = new Mock<IMailService>();
+
+        var controller = new ProfileController(
+            db,
+            hasher,
+            mailServiceMock.Object
+        );
 
         if (userId.HasValue)
             TestHelper.SetAuthenticatedUser(controller, userId.Value);
