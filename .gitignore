@@ -32,6 +32,7 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/dist/
+frontend/.env.local
 
 # Logs
 frontend/npm-debug.log*
