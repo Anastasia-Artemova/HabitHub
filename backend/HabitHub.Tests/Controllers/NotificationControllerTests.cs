@@ -327,6 +327,122 @@ public class NotificationsControllerTests : IClassFixture<CustomWebApplicationFa
         Assert.False(notification.IsRead);
     }
 
+    [Fact]
+    public async Task DeleteNotification_ReturnsNoContent_WhenNotificationExists()
+    {
+        var (client, member) = await CreateAuthenticatedClientAsync();
+        await SeedNotificationAsync(member.MemberId, "Delete me");
+
+        Guid notificationId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            notificationId = db.Notifications
+                .First(n => n.MemberId == member.MemberId)
+                .NotificationId;
+        }
+
+        var response = await client.DeleteAsync($"/api/notifications/{notificationId}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteNotification_RemovesFromDatabase()
+    {
+        var (client, member) = await CreateAuthenticatedClientAsync();
+        await SeedNotificationAsync(member.MemberId, "Will be gone");
+
+        Guid notificationId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            notificationId = db.Notifications
+                .First(n => n.MemberId == member.MemberId)
+                .NotificationId;
+        }
+
+        await client.DeleteAsync($"/api/notifications/{notificationId}");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var notification = db.Notifications.Find(notificationId);
+            Assert.Null(notification);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteNotification_Returns404_WhenNotificationDoesNotExist()
+    {
+        var (client, _) = await CreateAuthenticatedClientAsync();
+
+        var response = await client.DeleteAsync($"/api/notifications/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteNotification_Returns404_WhenNotificationBelongsToOtherUser()
+    {
+        var (client, _) = await CreateAuthenticatedClientAsync();
+        var (_, otherMember) = await CreateAuthenticatedClientAsync();
+
+        await SeedNotificationAsync(otherMember.MemberId, "Not yours to delete");
+
+        Guid notificationId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            notificationId = db.Notifications
+                .First(n => n.MemberId == otherMember.MemberId)
+                .NotificationId;
+        }
+
+        var response = await client.DeleteAsync($"/api/notifications/{notificationId}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteNotification_Returns401_WhenNotAuthenticated()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.DeleteAsync($"/api/notifications/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteNotification_DoesNotAffectOtherNotifications()
+    {
+        var (client, member) = await CreateAuthenticatedClientAsync();
+        await SeedNotificationAsync(member.MemberId, "Keep this one");
+        await SeedNotificationAsync(member.MemberId, "Delete this one");
+
+        Guid deleteId;
+        Guid keepId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var all = db.Notifications
+                .Where(n => n.MemberId == member.MemberId)
+                .ToList();
+            deleteId = all.First(n => n.Content == "Delete this one").NotificationId;
+            keepId = all.First(n => n.Content == "Keep this one").NotificationId;
+        }
+
+        await client.DeleteAsync($"/api/notifications/{deleteId}");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Null(db.Notifications.Find(deleteId));
+            Assert.NotNull(db.Notifications.Find(keepId));
+        }
+    }
+
+
     private record NotificationResponse(
         Guid NotificationId,
         string Content,

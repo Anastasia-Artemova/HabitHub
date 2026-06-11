@@ -59,4 +59,23 @@ public class NotificationsController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpDelete("{notificationId:guid}")]
+    public async Task<IActionResult> DeleteNotification(Guid notificationId, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId.GetUserId(User);
+
+        var notification = await _context.Notifications
+            .FirstOrDefaultAsync(
+                n => n.NotificationId == notificationId && n.MemberId == userId,
+                cancellationToken);
+
+        if (notification == null)
+            return NotFound();
+
+        _context.Notifications.Remove(notification);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
+    }
 }
