@@ -34,6 +34,12 @@ frontend/out/
 frontend/dist/
 frontend/.env.local
 
+# =========================
+# End-to-End Testing
+# =========================
+e2e/.env.example
+e2e/.env.local
+
 # Logs
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
@@ -45,6 +51,16 @@ frontend/yarn-error.log*
 frontend/coverage/
 backend/coverage-report*/
 backend/**/coverage-report*/
+
+# =========================
+# E2E / Playwright
+# =========================
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
+e2e/.auth/
+e2e/.env.local
 
 # =========================
 # Temp / cache
