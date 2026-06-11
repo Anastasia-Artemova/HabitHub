@@ -110,4 +110,23 @@ describe("NotificationDropdown", () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByText("Notifications")).not.toBeInTheDocument();
   });
+
+  it("removes a notification when the delete button is clicked", async () => {
+    render(<NotificationDropdown />);
+    fireEvent.click(getBellTrigger());
+
+    expect(await screen.findByText("Password changed successfully")).toBeInTheDocument();
+    expect(screen.getByText("Email updated successfully")).toBeInTheDocument();
+
+    const deleteButtons = screen.getAllByRole("button", { name: /delete notification/i });
+    expect(deleteButtons).toHaveLength(2);
+
+    fireEvent.click(deleteButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Password changed successfully")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Email updated successfully")).toBeInTheDocument();
+  });
 });

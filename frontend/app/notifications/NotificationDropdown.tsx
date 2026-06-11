@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { apiFetch } from "../auxiliary/apiFetch";
 
 type Notification = {
@@ -78,6 +78,24 @@ export default function NotificationDropdown({
     }
   }
 
+  async function deleteNotification(notificationId: string) {
+    setNotifications((prev) =>
+      prev.filter((n) => n.notificationId !== notificationId)
+    );
+
+    try {
+      await apiFetch<void>(`/api/notifications/${notificationId}`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error(err);
+      try {
+        const data = await apiFetch<Notification[]>("/api/notifications");
+        setNotifications(data);
+      } catch {
+      }
+    }
+  }
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -142,7 +160,7 @@ export default function NotificationDropdown({
                         markAsRead(n.notificationId);
                       }
                     }}
-                    className={`flex cursor-pointer items-center justify-between gap-4 border-b border-white/5 px-4 py-3 text-left transition hover:bg-white/5 ${
+                    className={`group flex cursor-pointer items-center justify-between gap-4 border-b border-white/5 px-4 py-3 text-left transition hover:bg-white/5 ${
                       !n.read ? "bg-white/[0.03]" : ""
                     }`}
                   >
@@ -153,11 +171,25 @@ export default function NotificationDropdown({
                       </p>
                     </div>
 
-                    {n.createdAt && (
-                      <span className="shrink-0 text-right text-xs text-white/35">
-                        {formatNotificationTimestamp(n.createdAt)}
-                      </span>
-                    )}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {n.createdAt && (
+                        <span className="text-right text-xs text-white/35">
+                          {formatNotificationTimestamp(n.createdAt)}
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        aria-label="Delete notification"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNotification(n.notificationId);
+                        }}
+                        className="flex h-6 w-6 items-center justify-center rounded-lg text-white/25 opacity-0 transition hover:bg-white/10 hover:text-white/70 group-hover:opacity-100"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

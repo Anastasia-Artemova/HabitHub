@@ -214,6 +214,48 @@ public class NotificationsApiTests : IClassFixture<CustomWebApplicationFactory>
         Assert.False(unmarkedOne.Read);
     }
 
+    [Fact]
+    public async Task FullFlow_DeleteNotification_RemovesFromGetResponse()
+    {
+        var (client, memberId) = await RegisterAndLoginAsync();
+        await SeedNotificationAsync(memberId, "Will be deleted");
+        await SeedNotificationAsync(memberId, "Will remain");
+
+        var getResp1 = await client.GetAsync("/api/notifications");
+        var before = await getResp1.Content.ReadFromJsonAsync<List<NotificationResponse>>();
+        Assert.Equal(2, before!.Count);
+
+        var deleteId = before.First(n => n.Content == "Will be deleted").NotificationId;
+        var deleteResp = await client.DeleteAsync($"/api/notifications/{deleteId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResp.StatusCode);
+
+        var getResp2 = await client.GetAsync("/api/notifications");
+        var after = await getResp2.Content.ReadFromJsonAsync<List<NotificationResponse>>();
+        Assert.Single(after!);
+        Assert.Equal("Will remain", after[0].Content);
+    }
+
+    [Fact]
+    public async Task FullFlow_DeleteNotification_CannotDeleteOtherUsersNotification()
+    {
+        var (clientA, memberAId) = await RegisterAndLoginAsync();
+        var (clientB, _) = await RegisterAndLoginAsync();
+
+        await SeedNotificationAsync(memberAId, "Belongs to A");
+
+        var getResp = await clientA.GetAsync("/api/notifications");
+        var body = await getResp.Content.ReadFromJsonAsync<List<NotificationResponse>>();
+        var notifId = body![0].NotificationId;
+
+        var deleteResp = await clientB.DeleteAsync($"/api/notifications/{notifId}");
+        Assert.Equal(HttpStatusCode.NotFound, deleteResp.StatusCode);
+
+        var getResp2 = await clientA.GetAsync("/api/notifications");
+        var after = await getResp2.Content.ReadFromJsonAsync<List<NotificationResponse>>();
+        Assert.Single(after!);
+    }
+
+
     private record NotificationResponse(
         Guid NotificationId,
         string Content,
