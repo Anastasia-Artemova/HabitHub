@@ -48,7 +48,7 @@ If this wasn't you, please reset your password immediately.";
         string subject,
         string body)
     {
-        if (!bool.TryParse(_configuration["SMTP_ENABLED"], out var smtpEnabled) || !smtpEnabled)
+        if (!bool.TryParse(_configuration["Email:Enabled"], out var smtpEnabled) || !smtpEnabled)
         {
             _logger.LogWarning("SMTP is disabled; email to {Email} was not sent.", to);
             return;
