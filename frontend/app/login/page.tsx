@@ -260,7 +260,7 @@ export default function HabitHubLoginPage() {
 
                 <motion.div
                   variants={itemVariants}
-                  className="flex flex-col gap-3 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between"
+                  className="text-sm text-white/70"
                 >
                   <label className="flex items-center gap-3">
                     <input
@@ -271,13 +271,6 @@ export default function HabitHubLoginPage() {
                     />
                     <span>Remember me</span>
                   </label>
-
-                  <Link
-                    href="#"
-                    className="font-medium text-emerald-300/85 transition hover:text-emerald-200"
-                  >
-                    Forgot password?
-                  </Link>
                 </motion.div>
 
                 <AnimateError error={error} />
