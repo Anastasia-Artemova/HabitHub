@@ -117,6 +117,7 @@ export default function HabitHubLoginPage() {
                 </span>
               </div>
             </div>
+            
 
             <div className="max-w-xl">
               <motion.div
